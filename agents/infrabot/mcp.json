@@ -10,7 +10,7 @@
     },
     "nats": {
       "command": "/usr/local/bin/mcp-nats",
-      "args": [],
+      "args": ["--transport", "stdio"],
       "env": { "NATS_URL": "nats://nats.agent-infra.svc:4222" }
     }
   }

@@ -24,23 +24,30 @@ dispatch() {
   local target="$1"
   local quiet=0
   local pane
+  local bypass_done=0
+  local devch_done=0
+  # Each prompt is accepted at most once — claude's rendered prompt text stays
+  # on the pane after acceptance, so a non-idempotent matcher would re-fire and
+  # send Down+Enter into the next state (which can pick the wrong option).
   for _ in $(seq 1 30); do
     pane="$(tmux capture-pane -p -t "$target" 2>/dev/null || true)"
-    if printf '%s' "$pane" | grep -qE "Bypass.*Permissions"; then
+    if [ "$bypass_done" = 0 ] && printf '%s' "$pane" | grep -qE "Bypass.*Permissions"; then
       sleep 2
       tmux send-keys -t "$target" Down
-      sleep 0.3
+      sleep 0.5
       tmux send-keys -t "$target" Enter
       echo "[entrypoint] $target: auto-accepted Bypass Permissions warning"
-      quiet=0; sleep 3
-    elif printf '%s' "$pane" | grep -q "I am using this for local development"; then
+      bypass_done=1
+      quiet=0; sleep 4
+    elif [ "$devch_done" = 0 ] && printf '%s' "$pane" | grep -q "I am using this for local development"; then
       sleep 2
       tmux send-keys -t "$target" Enter
       echo "[entrypoint] $target: auto-accepted development channels prompt"
-      quiet=0; sleep 3
+      devch_done=1
+      quiet=0; sleep 4
     else
       quiet=$((quiet + 1))
-      [ "$quiet" -ge 5 ] && break
+      if [ "$quiet" -ge 5 ]; then break; fi
       sleep 2
     fi
   done

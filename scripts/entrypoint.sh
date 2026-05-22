@@ -67,15 +67,18 @@ if ! tmux has-session -t main 2>/dev/null; then
   tmux send-keys -t main:0.0 "${CLAUDE_CMD[*]}" Enter
   dispatch main:0.0
 
-  # Pane 1 (bottom): dedicated --remote-control claude with its own HOME
-  # so it doesn't fight pane 0 over ~/.claude.json.
+  # Pane 1 (bottom): a spare interactive claude with its own HOME, for direct
+  # driving via `kubectl exec ... tmux attach` (then Ctrl-b o to switch panes).
+  # Separate HOME so it doesn't fight pane 0 over ~/.claude.json.
+  # (--remote-control was dropped: setup-token-issued sessions don't surface
+  # in the interactive Claude desktop / app — per Claude Code auth docs.)
   tmux split-window -v -t main:0 -c "${WORKDIR}"
   tmux pipe-pane -t main:0.1 -o 'cat >> /proc/1/fd/1'
-  tmux send-keys -t main:0.1 "HOME=/root/rc-home claude --remote-control \"${AGENT_NAME}\" --permission-mode bypassPermissions" Enter
+  tmux send-keys -t main:0.1 "HOME=/root/rc-home claude --permission-mode bypassPermissions" Enter
   dispatch main:0.1
 fi
 
-echo "[entrypoint] tmux 'main': pane 0 = channels, pane 1 = remote-control"
+echo "[entrypoint] tmux 'main': pane 0 = channels, pane 1 = spare claude (direct attach)"
 echo "[entrypoint] attach: kubectl exec -it -n agents ${AGENT_NAME}-0 -- tmux attach -t main"
 
 # Keep the container alive; exit if the tmux session dies.

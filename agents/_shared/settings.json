@@ -3,10 +3,14 @@
   "extraKnownMarketplaces": {
     "claude-code-channel-matrix": {
       "source": { "source": "github", "repo": "zekker6/claude-code-channel-matrix" }
+    },
+    "claude-plugins-official": {
+      "source": { "source": "github", "repo": "anthropics/claude-plugins-official" }
     }
   },
   "enabledPlugins": {
-    "matrix@claude-code-channel-matrix": true
+    "matrix@claude-code-channel-matrix": true,
+    "superpowers@claude-plugins-official": true
   },
   "permissions": {
     "allow": [

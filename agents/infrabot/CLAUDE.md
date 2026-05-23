@@ -17,7 +17,7 @@ You manage all of this. Know it well.
 
 | Layer | Technology |
 |-------|-----------|
-| Orchestration | k3s, 3-node LXC on Proxmox (`kubectl version` for exact release) |
+| Orchestration | k3s v1.35.4+k3s1, 3-node LXC on Proxmox |
 | GitOps | Flux CD (HelmRelease, Kustomization, GitRepository, HelmRepository) |
 | Helm | bjw-s app-template v3.7.3 for apps; official charts for infra |
 | Ingress | Traefik v3 — all apps at `*.lab.sherodtaylor.dev` |

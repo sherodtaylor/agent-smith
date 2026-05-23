@@ -29,6 +29,12 @@ RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
     && apt-get update && apt-get install -y gh \
     && rm -rf /var/lib/apt/lists/*
 
+# kubectl
+RUN KUBECTL_VERSION=$(curl -sL https://dl.k8s.io/release/stable.txt) \
+    && curl -Lo /usr/local/bin/kubectl \
+         "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl" \
+    && chmod +x /usr/local/bin/kubectl
+
 # Node.js (for the Claude Code CLI)
 RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
     && apt-get install -y nodejs \

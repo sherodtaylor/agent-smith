@@ -2,16 +2,16 @@
   "mcpServers": {
     "victoria-metrics": {
       "type": "http",
-      "url": "https://vm-mcp.lab.sherodtaylor.dev/mcp"
+      "url": "http://victoria-metrics-mcp.monitoring.svc.cluster.local:8080/mcp"
     },
     "victoria-logs": {
       "type": "http",
-      "url": "https://vl-mcp.lab.sherodtaylor.dev/mcp"
+      "url": "http://victoria-logs-mcp.monitoring.svc.cluster.local:8080/mcp"
     },
     "nats": {
       "command": "/usr/local/bin/mcp-nats",
       "args": ["--transport", "stdio"],
-      "env": { "NATS_URL": "nats://nats.agent-infra.svc:4222" }
+      "env": { "NATS_URL": "nats://nats.agent-infra.svc.cluster.local:4222" }
     }
   }
 }

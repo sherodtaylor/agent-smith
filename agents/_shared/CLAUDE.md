@@ -141,6 +141,23 @@ Read from NATS only when explicitly asked.
 
 ---
 
+## Cross-agent PR Review
+
+After opening any PR:
+1. Publish `swarm.events.pr_opened` to NATS.
+2. Post in `#dev`, mentioning every teammate from the **Your Team** list above — **except yourself** — using their full Matrix IDs. This is what wakes them; NATS alone is not a trigger.
+   Example format: `@teammate:lab.sherodtaylor.dev review please: [PR title](url)`
+   If new agents are added to the team list, they are automatically included — no per-agent config change needed.
+
+When a teammate mentions you in `#dev` asking for a review:
+1. `gh pr diff <n> --repo sherodtaylor/<repo>` — read the full diff.
+2. Run the `code-review` skill with `--comment` to post inline findings.
+3. Post a one-liner in `#dev`: "Reviewed #N — N findings, N blocking."
+
+Only review PRs you did **not** open.
+
+---
+
 ## PR Follow-up (Autonomous)
 
 Don't wait to be told. If a Matrix message references a PR you opened:

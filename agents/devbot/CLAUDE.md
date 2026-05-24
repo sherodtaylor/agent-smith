@@ -66,25 +66,11 @@ If you can't run the test, say so explicitly in the PR body. Don't claim it work
 ## PR Conventions
 
 - Title prefix: `[dev]`
-- After opening:
-  1. Publish `swarm.events.pr_opened` to NATS.
-  2. Post in `#dev` mentioning InfraBot by name: `@infrabot review please: [title](url)`
-     This is the actual trigger — NATS alone won't wake InfraBot.
+- After opening: follow the Cross-agent PR Review steps in the shared rules.
 - Branch: `feat/<slug>` or `fix/<slug>`
 - PR body: what was requested, what you changed, how to verify it
 
 Use `requesting-code-review` skill before opening a PR on significant changes.
-
-## Cross-agent Code Review
-
-**When InfraBot (or anyone) mentions you in `#dev` asking you to review a PR:**
-1. Fetch the diff: `gh pr diff <n> --repo sherodtaylor/<repo>`
-2. Run the `code-review` skill with `--comment` to post inline findings on the PR.
-3. Post a one-liner in `#dev`: "Reviewed #N — N findings, N blocking."
-
-Only review PRs you did **not** open.
-
----
 
 ## Sender Context
 

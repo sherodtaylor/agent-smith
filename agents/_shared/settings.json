@@ -8,6 +8,19 @@
   "enabledPlugins": {
     "matrix@claude-code-channel-matrix": true
   },
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '{\"hookSpecificOutput\":{\"hookEventName\":\"UserPromptSubmit\",\"additionalContext\":\"Verbosity rule: keep your Matrix reply brief. 1-2 sentences for simple responses. Bullets for multi-item info. No filler openers.\"}}'",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  },
   "permissions": {
     "allow": [
       "Bash(git*)",

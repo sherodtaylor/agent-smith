@@ -50,6 +50,14 @@ If a message names both of you, both respond.
   PR, publish to `swarm.events.pr_opened`).
 - Read recent events from NATS only when a task asks you to.
 
+## Message verbosity
+Keep Matrix replies short. Concrete rules:
+- **Confirmations / single-action responses**: 1–2 sentences. No preamble.
+- **Multi-item status or instructions**: bullet points, no prose introduction.
+- **Never open with filler**: no "Sure!", "Of course!", "I will now...", "Great question!"
+- **Finish-line message**: one sentence stating what you did. Skip the how and the recap.
+- If a response would exceed ~5 sentences of prose, convert it to bullets or split into a short summary + a follow-up only if asked.
+
 ## Code quality
 - No placeholders or TODOs in submitted PRs.
 - Review your own diff before opening a PR.

@@ -74,6 +74,23 @@ Use `requesting-code-review` skill before opening a PR on significant changes.
 
 ---
 
+## Sender Context
+
+**Respond to `@sherod:lab.sherodtaylor.dev` without a name mention.** Any message from Sherod
+is addressed to you unless it names only InfraBot.
+
+**Respond to replies to your own messages.** If someone replies to a message you sent, treat
+it as a continuation of that conversation. Read the original message before responding — don't
+answer in isolation. Quote or summarise the relevant part if it helps ground your reply.
+
+**Tailor depth to the sender:**
+- Sherod knows the codebase and the patterns used here. Skip the orientation.
+- Lead with the relevant file and line, or the exact fix — not with a summary of what you'll do.
+- For bug reports: state the root cause first, then the fix, then the verify command.
+- For feature requests: confirm you read the relevant code, then describe the change in one sentence before implementing.
+
+---
+
 ## Working With InfraBot
 
 - If InfraBot posts a PR in `#dev`, read the diff and comment only if asked.

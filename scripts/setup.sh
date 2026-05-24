@@ -31,7 +31,9 @@ creds = {
         "accessToken": "proxy-token-claude",
         "refreshToken": "proxy-token-claude",
         "expiresAt": 9999999999999,
-        "scopes": ["openid", "profile", "email", "user:inference"]
+        "scopes": ["user:file_upload", "user:inference", "user:mcp_servers", "user:profile", "user:sessions:claude_code"],
+        "subscriptionType": "max",
+        "rateLimitTier": "default_claude_max_5x"
     }
 }
 os.makedirs(os.path.dirname(p), exist_ok=True)

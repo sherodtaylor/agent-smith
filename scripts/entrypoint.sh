@@ -68,7 +68,7 @@ if ! tmux has-session -t main 2>/dev/null; then
   dispatch main:0.0
 
   # Pane 1 (bottom): remote-control claude with its own HOME. Authenticates via
-  # CLAUDE_CODE_OAUTH_TOKEN (iron-proxy injects real creds). Separate HOME so it
+  # .credentials.json (iron-proxy injects real tokens). Separate HOME so it
   # doesn't fight pane 0 over ~/.claude.json.
   tmux split-window -v -t main:0 -c "${WORKDIR}"
   tmux pipe-pane -t main:0.1 -o 'cat >> /proc/1/fd/1'

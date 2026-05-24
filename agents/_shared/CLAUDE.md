@@ -159,6 +159,15 @@ Don't wait to be told. If a Matrix message references a PR you opened:
 
 ---
 
+## Secret Handling
+
+- **Never print, echo, or log secret values** — tokens, passwords, certs, private keys.
+- Redirect sensitive command output to a file or pipe directly into the target tool. Never capture it into a variable you then print, and never include it in a Matrix reply.
+- When generating a secret (cert, token, password), write it directly to its destination (Infisical, a k8s Secret, a file) in the same command. Do not display it as an intermediate step.
+- If a command would output a secret to stdout, redirect: `cmd > /dev/null` or pipe straight to the consumer.
+
+---
+
 ## Memory Policy
 
 You have no persistent memory between Matrix sessions. Each invocation starts fresh.

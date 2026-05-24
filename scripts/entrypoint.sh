@@ -19,7 +19,11 @@ CLAUDE_CMD=(
 
 # Poll a tmux pane and drive past the interactive first-run prompts that have no
 # headless config bypass (Bypass Permissions warning; development-channels consent
-# for --dangerously-load-development-channels). Exit after 5 quiet iterations.
+# for --dangerously-load-development-channels).
+#
+# Quiet-exit only kicks in after the bypass prompt is accepted — before that we
+# just wait for claude to finish starting up, which can take 20-30s on a cold
+# pull and would previously cause the loop to bail before any prompt appeared.
 dispatch() {
   local target="$1"
   local quiet=0
@@ -30,7 +34,7 @@ dispatch() {
   # Each prompt is accepted at most once — claude's rendered prompt text stays
   # on the pane after acceptance, so a non-idempotent matcher would re-fire and
   # send Down+Enter into the next state (which can pick the wrong option).
-  for _ in $(seq 1 30); do
+  for _ in $(seq 1 60); do
     pane="$(tmux capture-pane -p -t "$target" 2>/dev/null || true)"
     if [ "$theme_done" = 0 ] && printf '%s' "$pane" | grep -q "Choose the text style"; then
       sleep 2
@@ -54,7 +58,9 @@ dispatch() {
       quiet=0; sleep 4
     else
       quiet=$((quiet + 1))
-      if [ "$quiet" -ge 5 ]; then break; fi
+      # Don't exit on quiet until bypass has been handled — before that, claude
+      # is still starting up and hasn't shown any prompts yet.
+      if [ "$bypass_done" = 1 ] && [ "$quiet" -ge 5 ]; then break; fi
       sleep 2
     fi
   done

@@ -13,6 +13,21 @@ if [ ! -d "$AGENT_DIR" ]; then
   exit 1
 fi
 
+# Trust the iron-proxy MITM CA so git, gh, curl, and Node all accept its certs.
+if [ -n "${IRON_PROXY_CA_CRT:-}" ]; then
+  printf '%s' "${IRON_PROXY_CA_CRT}" > /usr/local/share/ca-certificates/iron-proxy.crt
+  update-ca-certificates 2>/dev/null
+  echo "[setup] installed iron-proxy CA"
+fi
+
+# Write Claude OAuth credentials for the remote-control Claude instance.
+# Never echoed — written directly to file with mode 600.
+if [ -n "${SWARM_CLAUDE_CREDENTIALS:-}" ]; then
+  printf '%s' "${SWARM_CLAUDE_CREDENTIALS}" > "${CLAUDE_DIR}/.credentials.json"
+  chmod 600 "${CLAUDE_DIR}/.credentials.json"
+  echo "[setup] wrote Claude credentials"
+fi
+
 mkdir -p "${CLAUDE_DIR}/agents" "${CLAUDE_DIR}/channels/matrix"
 
 # CLAUDE.md = shared base + agent persona
@@ -141,4 +156,8 @@ json.dump(d, open(p, "w"))
 PY
 [ -f "${HOME}/.gitconfig" ]       && cp "${HOME}/.gitconfig"       "${RC_HOME}/.gitconfig"
 [ -f "${HOME}/.git-credentials" ] && cp "${HOME}/.git-credentials" "${RC_HOME}/.git-credentials" && chmod 600 "${RC_HOME}/.git-credentials"
+if [ -f "${CLAUDE_DIR}/.credentials.json" ]; then
+  cp "${CLAUDE_DIR}/.credentials.json" "${RC_HOME}/.claude/.credentials.json"
+  chmod 600 "${RC_HOME}/.claude/.credentials.json"
+fi
 echo "[setup] mirrored config to ${RC_HOME} for remote-control claude"

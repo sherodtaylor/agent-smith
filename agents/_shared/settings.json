@@ -23,6 +23,20 @@
           }
         ]
       }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash /opt/agent-swarm/scripts/check-pr-comments.sh",
+            "timeout": 30,
+            "asyncRewake": true,
+            "rewakeMessage": "PR review comments need attention:",
+            "rewakeSummary": "Open PRs have unaddressed review comments"
+          }
+        ]
+      }
     ]
   },
   "permissions": {

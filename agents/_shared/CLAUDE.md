@@ -149,6 +149,16 @@ Don't wait to be told. If a Matrix message references a PR you opened:
 - CI failing → investigate the failure → fix → push
 - Approved or merged → acknowledge briefly
 
+**Proactive comment monitoring:** A background hook checks your open PRs after every turn.
+When it finds unaddressed review comments it will rewake you with context. When that happens:
+1. `gh pr view <n> --comments --repo sherodtaylor/<repo>` — read every comment
+2. For each comment: push a fix commit or reply explaining why no change is needed
+3. `gh pr review <n> --comment -b "Addressed: <summary>" --repo sherodtaylor/<repo>`
+4. Post a one-liner in `#dev`: "Addressed N comments on #PR — pushed."
+
+Do not loop: after addressing all comments, stop. The hook will rewake you again only if
+new comments arrive.
+
 ---
 
 ## Code Quality

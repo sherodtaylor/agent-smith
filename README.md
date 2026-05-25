@@ -17,25 +17,56 @@ a third teammate from the same image.
 
 ---
 
-## The problem this solves
+## Why use this?
 
-Routine homelab work — bumping a Helm chart, diagnosing a `CrashLoopBackOff`, applying a
-YAML fix from a phone — is annoyingly slow when every action requires SSH and `kubectl`.
-Existing ChatOps tools are brittle, command-shaped, and stop at "trigger a runbook"; they
-do not *engineer*.
+If you have a Claude Pro or Max subscription and you want to point it at *long-running*
+engineering work — bumping a chart, fixing a flaky build, triaging a bug, applying a YAML
+fix from your phone — your current options aren't great:
 
-`agent-swarm` is built around a different idea: real engineering teammates that
+- **The Anthropic API** is billed per token, separate from your subscription. Running a
+  bot 24/7 turns a fixed monthly cost into a metered one that scales with how much you
+  actually use it.
+- **Existing ChatOps tools** (Hubot, Lita, the long tail of custom Slack bots) are
+  command-shaped: they *trigger* runbooks, they don't *engineer*. Adding a new capability
+  means writing a new command.
+- **The Claude Code CLI on your laptop** is interactive and short-lived. Close the lid
+  and the agent is gone — along with every warm prompt cache and MCP connection.
 
-- live in a Matrix chat room you can reach from any client, including mobile,
-- have full filesystem + shell access on a persistent workspace with cluster credentials,
-- follow the same git workflow you do (feature branches, conventional commits, PRs),
-- coordinate among themselves — one bot opens a PR, the other reviews it,
-- pick up follow-up automatically when review comments land on a PR they authored,
-- never actually hold the real GitHub or Claude credentials — those are swapped in at the
-  network boundary by an egress credential firewall (see [Security](#security--iron-proxy)).
+`agent-swarm` is the smallest wrapper that turns Claude Code *itself* into the bot: a
+long-lived `claude` process per agent, running on your existing subscription quota, in a
+Kubernetes pod, taking work from a Matrix chat room. There is no command DSL — messages
+are natural-language prompts, and an `agents/<name>/CLAUDE.md` persona tells the agent
+how to behave. Building a new teammate is dropping in a directory.
 
-Everything else — the image layout, the init container, the tmux dance, the hooks — exists
-to make that work reliably as a single Kubernetes `StatefulSet` per agent.
+### What you get
+
+- **Claude Code, multi-agent, 24/7.** Real `claude` CLI, with whatever skills, plugins,
+  subagents, and MCP servers you already use on your laptop — just running as a
+  `StatefulSet` per teammate. A new agent is ~100 lines of YAML + Markdown under
+  `agents/<name>/`; no fork required.
+- **Matrix as the input channel.** Reach the bot from any Matrix client, including
+  mobile. Mentions wake it; the 👀 reaction confirms receipt; reply threads continue the
+  conversation. No new command surface to learn — it's just chat.
+- **Engineering teammates, not query-reply bots.** They follow the same git workflow you
+  do — feature branches, conventional commits, pull requests. They open PRs on each
+  other's repos, run cross-agent code review inline on the diff, and auto-address review
+  comments via a `Stop`-hook re-wake, without a human nudging them.
+- **Safe by construction.** Agents never hold your real GitHub PAT or Claude OAuth
+  tokens. Stub credentials live in the pod; iron-proxy swaps in the real ones at the
+  cluster edge against a domain allowlist ([Security](#security--iron-proxy),
+  [Claude credentials](#claude-credentials-stub--login-not-setup-token)). A compromised
+  pod leaks nothing useful.
+- **Subscription-quota only.** Because each agent is the Claude Code CLI (not the Agent
+  SDK), every prompt counts against your Pro / Max plan rather than metered API
+  consumption. See [the next section](#why-claude-code-cli-not-the-agent-sdk-claude--p-or-an-alternative-wrapper)
+  for the trade-off in full.
+- **Production-ready Kubernetes deploy.** Single `StatefulSet` per agent, parametric on
+  `AGENT_NAME`. The reference manifests in `sherodtaylor/homelab/k8s/apps/agent-swarm/`
+  show the full pattern — Infisical-backed ExternalSecrets, a PVC for `~/.claude/`,
+  iron-proxy DNS routing, the lot.
+
+Everything else — the image layout, the init container, the tmux dance, the hooks —
+exists to make that combination work reliably from one Docker image.
 
 ### Why Claude Code CLI (not the Agent SDK, `claude -p`, or an alternative wrapper)
 

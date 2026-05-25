@@ -51,6 +51,10 @@ spec:
             - name: NATS_URL
               value: {{ .Values.nats.url | quote }}
             {{- end }}
+            {{- if .Values.dotfiles.installUrl }}
+            - name: DOTFILES_INSTALL_URL
+              value: {{ .Values.dotfiles.installUrl | quote }}
+            {{- end }}
             {{- with .Values.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}

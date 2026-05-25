@@ -27,6 +27,15 @@ nats:
   # e.g. "nats://nats.agent-infra.svc.cluster.local:4222"
   url: ""
 
+# Optional dev-environment bootstrap. When installUrl is set, the init container
+# pipes the URL into bash as a non-fatal final step:
+#   curl -fsSL "$DOTFILES_INSTALL_URL" | bash
+# Failures emit a warning to stdout (visible via VictoriaLogs) and do NOT block
+# pod startup. The remote script MUST be idempotent — setup runs on every pod
+# restart, not just first boot.
+dotfiles:
+  installUrl: ""
+
 # Secret-handling: the chart does NOT manage the underlying Secret. Point it
 # at one you already have (created manually, by ExternalSecrets, or by sealed-
 # secrets) that contains the runtime env vars. Required keys:

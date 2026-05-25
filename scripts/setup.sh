@@ -124,4 +124,17 @@ for repo in ${AGENT_REPOS:-sherodtaylor/homelab}; do
   fi
 done
 
+# Optional dev-environment bootstrap. Non-fatal by design — failure logs a
+# warning for VictoriaLogs and the pod still starts. The remote install script
+# must be idempotent (setup.sh runs on every pod restart).
+if [ -n "${DOTFILES_INSTALL_URL:-}" ]; then
+  echo "[setup] running dotfiles install: ${DOTFILES_INSTALL_URL}"
+  if curl -fsSL "${DOTFILES_INSTALL_URL}" | bash; then
+    echo "[setup] dotfiles install ok"
+  else
+    rc=$?
+    echo "[setup] WARN dotfiles install failed (exit ${rc}) — continuing"
+  fi
+fi
+
 echo "[setup] complete"

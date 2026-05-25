@@ -104,6 +104,18 @@ nodeSelector: {}
 tolerations: []
 affinity: {}
 
+# Optional user-supplied shell command executed at the end of the init
+# container's setup.sh, AFTER iron-proxy CA, ~/.claude/ assembly, git/gh
+# credentials, and repo clones. Best-effort: a non-zero exit logs a warning
+# and the pod continues to start. Idempotency is the command's responsibility.
+#
+# Use for environment customizations the chart doesn't ship — bootstrap
+# dotfiles, install per-user tooling, fetch extra credentials, etc. Example:
+#   setup:
+#     command: "curl -fsSL https://raw.githubusercontent.com/<user>/dotfiles/main/install.sh | bash"
+setup:
+  command: ""
+
 # Extra env vars (merged with the chart-managed ones) — useful for per-agent
 # tweaks without forking the chart
 extraEnv: []

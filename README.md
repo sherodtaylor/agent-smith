@@ -1,6 +1,6 @@
 # agent-smith
 
-> Chat-driven AI engineering teammates for a self-hosted homelab.
+> Chat-driven AI engineering agents for a k8.
 
 <img width="764" height="503" alt="image" src="https://github.com/user-attachments/assets/64c9037e-fc46-4212-b3c6-b5400a6123d1" />
 

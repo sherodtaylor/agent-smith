@@ -96,16 +96,6 @@ else
   fail "claude-loop.sh expected exit 1, got exit ${EXIT_CODE}"
 fi
 
-# ── Test 3: keepalive-loop.sh exits 0 when prompts file is absent ──
-echo "--- Test 3: keepalive exits 0 when prompts file absent ---"
-EXIT_CODE=0
-AGENT_NAME="devbot" bash "${SCRIPT_DIR}/../scripts/keepalive-loop.sh" 2>/dev/null || EXIT_CODE=$?
-if [ "$EXIT_CODE" -eq 0 ]; then
-  pass "keepalive-loop.sh exits 0 when prompts file is absent"
-else
-  fail "keepalive-loop.sh expected exit 0, got exit ${EXIT_CODE}"
-fi
-
 # ── Summary ──
 echo ""
 echo "Results: ${PASS} passed, ${FAIL} failed"

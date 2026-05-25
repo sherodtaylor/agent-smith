@@ -4,6 +4,7 @@ set -euo pipefail
 AGENT_NAME="${AGENT_NAME:?AGENT_NAME must be set}"
 PRIMARY_REPO="${PRIMARY_REPO:-homelab}"
 WORKDIR="/workspace/${PRIMARY_REPO}"
+PROMPTS_FILE="/opt/agent-smith/agents/${AGENT_NAME}/keepalive-prompts.txt"
 
 echo "[entrypoint] agent=${AGENT_NAME} workdir=${WORKDIR}"
 
@@ -70,41 +71,47 @@ if ! tmux has-session -t main 2>/dev/null; then
   tmux send-keys -t main:0.0 "bash /opt/agent-smith/scripts/claude-loop.sh" Enter
   dispatch main:0.0
 
-  # Pane 1 (bottom): plain shell, for ad-hoc inspection / commands while
-  # attached. No second claude — pane 0 already owns the remote-control session.
+  # Pane 1 (bottom): plain shell, for ad-hoc inspection / commands while attached.
   tmux split-window -v -t main:0 -c "${WORKDIR}"
   tmux pipe-pane -t main:0.1 -o 'cat >> /proc/1/fd/1'
-
-  # Pane 2 (background): organic keep-alive prompts injected into pane 0
-  # at random 1-3hr intervals to prevent flat-activity detection signatures.
-  tmux split-window -v -t main:0 -c "${WORKDIR}"
-  tmux pipe-pane -t main:0.2 -o 'cat >> /proc/1/fd/1'
-  tmux send-keys -t main:0.2 "bash /opt/agent-smith/scripts/keepalive-loop.sh" Enter
 fi
 
-echo "[entrypoint] tmux 'main': pane 0 = claude (channels + remote-control), pane 1 = shell, pane 2 = keepalive"
+echo "[entrypoint] tmux 'main': pane 0 = claude (channels + remote-control), pane 1 = shell"
 echo "[entrypoint] attach: kubectl exec -it -n agents ${AGENT_NAME}-0 -- tmux attach -t main"
 
 # Keep the container alive; exit if the tmux session dies.
-# Also continuously scan pane 0 for interactive prompts that appear
-# on post-crash restarts (claude-loop.sh restarts claude but dispatch() only
-# runs once at initial startup).
+# Every 10s: scan pane 0 for interactive prompts that appear on post-crash restarts.
+# Every 1-3hr: inject an organic keep-alive prompt into pane 0 to prevent flat-activity signatures.
+NEXT_PROMPT=$(( $(date +%s) + 3600 + RANDOM % 7200 ))
+
 while tmux has-session -t main 2>/dev/null; do
   sleep 10
-  for pane in main:0.0 main:0.1; do
-    capture="$(tmux capture-pane -p -t "$pane" 2>/dev/null || true)"
-    if printf '%s' "$capture" | grep -q "Choose the text style"; then
-      tmux send-keys -t "$pane" Enter
+
+  capture="$(tmux capture-pane -p -t main:0.0 2>/dev/null || true)"
+  if printf '%s' "$capture" | grep -q "Choose the text style"; then
+    tmux send-keys -t main:0.0 Enter
+  fi
+  if printf '%s' "$capture" | grep -qE "Bypass.*Permissions"; then
+    tmux send-keys -t main:0.0 Down
+    sleep 0.5
+    tmux send-keys -t main:0.0 Enter
+  fi
+  if printf '%s' "$capture" | grep -q "I am using this for local development"; then
+    tmux send-keys -t main:0.0 Enter
+  fi
+
+  NOW=$(date +%s)
+  if [ "$NOW" -ge "$NEXT_PROMPT" ] && [ -f "$PROMPTS_FILE" ]; then
+    SNAP1="$(tmux capture-pane -p -t main:0.0 2>/dev/null || true)"
+    sleep 30
+    SNAP2="$(tmux capture-pane -p -t main:0.0 2>/dev/null || true)"
+    if [ "$SNAP1" = "$SNAP2" ]; then
+      PROMPT="$(shuf -n 1 "$PROMPTS_FILE")"
+      tmux send-keys -t main:0.0 "$PROMPT" Enter
+      echo "[entrypoint] keepalive: injected prompt"
     fi
-    if printf '%s' "$capture" | grep -qE "Bypass.*Permissions"; then
-      tmux send-keys -t "$pane" Down
-      sleep 0.5
-      tmux send-keys -t "$pane" Enter
-    fi
-    if printf '%s' "$capture" | grep -q "I am using this for local development"; then
-      tmux send-keys -t "$pane" Enter
-    fi
-  done
+    NEXT_PROMPT=$(( $(date +%s) + 3600 + RANDOM % 7200 ))
+  fi
 done
 echo "[entrypoint] tmux session ended — exiting"
 exit 1

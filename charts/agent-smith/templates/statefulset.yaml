@@ -1,22 +1,22 @@
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: {{ include "agent-swarm.fullname" . }}
+  name: {{ include "agent-smith.fullname" . }}
   labels:
-    {{- include "agent-swarm.labels" . | nindent 4 }}
+    {{- include "agent-smith.labels" . | nindent 4 }}
 spec:
-  serviceName: {{ include "agent-swarm.fullname" . }}
+  serviceName: {{ include "agent-smith.fullname" . }}
   replicas: 1
   podManagementPolicy: OrderedReady
   selector:
     matchLabels:
-      {{- include "agent-swarm.selectorLabels" . | nindent 6 }}
+      {{- include "agent-smith.selectorLabels" . | nindent 6 }}
   template:
     metadata:
       labels:
-        {{- include "agent-swarm.labels" . | nindent 8 }}
+        {{- include "agent-smith.labels" . | nindent 8 }}
     spec:
-      serviceAccountName: {{ include "agent-swarm.serviceAccountName" . }}
+      serviceAccountName: {{ include "agent-smith.serviceAccountName" . }}
       {{- if .Values.ironProxy.enabled }}
       dnsPolicy: None
       dnsConfig:
@@ -29,9 +29,9 @@ spec:
       {{- end }}
       initContainers:
         - name: setup
-          image: {{ include "agent-swarm.image" . | quote }}
+          image: {{ include "agent-smith.image" . | quote }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          command: ["/opt/agent-swarm/scripts/setup.sh"]
+          command: ["/opt/agent-smith/scripts/setup.sh"]
           env:
             - name: AGENT_NAME
               value: {{ .Values.agentName | quote }}
@@ -66,7 +66,7 @@ spec:
               mountPath: /workspace
       containers:
         - name: agent
-          image: {{ include "agent-swarm.image" . | quote }}
+          image: {{ include "agent-smith.image" . | quote }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           # tmux needs a TTY; the entrypoint backgrounds it but pane-attach via
           # `kubectl exec -it ... -- tmux attach -t main` expects one.

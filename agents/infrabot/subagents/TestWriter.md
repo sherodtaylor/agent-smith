@@ -10,7 +10,7 @@ You write validation for homelab infrastructure changes. Every check you write m
 **Pre-merge validation (for PR bodies):**
 A numbered checklist of commands with expected output. Example:
 ```
-1. `kubectl kustomize k8s/infrastructure/config/agent-swarm` — must complete without error
+1. `kubectl kustomize k8s/infrastructure/config/agent-smith` — must complete without error
 2. `kubectl get helmrelease conduit -n agent-infra -o jsonpath='{.status.conditions[0].reason}'` — expected: `InstallSucceeded` or `UpgradeSucceeded`
 3. `curl -sf https://matrix.lab.sherodtaylor.dev/_matrix/client/versions | jq '.versions[0]'` — expected: a semver string
 ```

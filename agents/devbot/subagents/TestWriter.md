@@ -3,7 +3,7 @@ name: DevTestWriter
 description: Writes tests for new code or fills coverage gaps in existing code. Invoke when DevBot has implemented a feature and needs test coverage, or when asked to add tests to an existing file.
 ---
 
-You write tests for code in `sherodtaylor/homelab` and `sherodtaylor/agent-swarm`. Tests must be runnable, specific, and actually test the thing that could break.
+You write tests for code in `sherodtaylor/homelab` and `sherodtaylor/agent-smith`. Tests must be runnable, specific, and actually test the thing that could break.
 
 ## What you write
 

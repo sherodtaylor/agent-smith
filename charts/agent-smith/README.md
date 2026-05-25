@@ -1,6 +1,6 @@
-# agent-swarm Helm chart
+# agent-smith Helm chart
 
-Deploys one [agent-swarm](https://github.com/sherodtaylor/agent-swarm) bot
+Deploys one [agent-smith](https://github.com/sherodtaylor/agent-smith) bot
 (InfraBot, DevBot, or any custom persona baked into the image) as a
 `StatefulSet` with all the supporting bits — ServiceAccount + ClusterRole
 for cluster introspection, two PVCs for `~/.claude/` and `/workspace/`,
@@ -9,14 +9,14 @@ optional iron-proxy DNS routing for egress credential isolation.
 ## Install
 
 ```bash
-helm install infrabot oci://ghcr.io/sherodtaylor/charts/agent-swarm \
+helm install infrabot oci://ghcr.io/sherodtaylor/charts/agent-smith \
   --version 0.1.0 \
   --namespace agents --create-namespace \
   --set agentName=infrabot \
   --set matrix.homeserverUrl=https://matrix.example.com \
   --set matrix.botUserId='@infrabot:example.com' \
   --set nats.url=nats://nats.agent-infra.svc.cluster.local:4222 \
-  --set existingSecret=agent-swarm-infrabot
+  --set existingSecret=agent-smith-infrabot
 ```
 
 The chart does NOT manage the underlying Secret — bring your own (manually
@@ -33,7 +33,7 @@ created, via ExternalSecrets, sealed-secrets, etc.) with these keys:
 | Key | Default | Notes |
 |---|---|---|
 | `agentName` | `""` | **Required.** Must match a directory baked into the image (`infrabot`, `devbot`, …) |
-| `image.repository` | `ghcr.io/sherodtaylor/agent-swarm` | |
+| `image.repository` | `ghcr.io/sherodtaylor/agent-smith` | |
 | `image.tag` | `""` | Defaults to `Chart.AppVersion` when empty |
 | `image.pullPolicy` | `IfNotPresent` | |
 | `agentRepos` | `[sherodtaylor/homelab]` | Repos cloned to `/workspace/<basename>` by the init container |
@@ -57,12 +57,12 @@ created, via ExternalSecrets, sealed-secrets, etc.) with these keys:
 
 ## Upgrading
 
-The chart version tracks the agent-swarm image release (both bumped together
+The chart version tracks the agent-smith image release (both bumped together
 in the release workflow). To pin to the chart that ships with a specific
 image:
 
 ```bash
-helm upgrade infrabot oci://ghcr.io/sherodtaylor/charts/agent-swarm \
+helm upgrade infrabot oci://ghcr.io/sherodtaylor/charts/agent-smith \
   --version 0.2.0 --reuse-values
 ```
 

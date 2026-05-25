@@ -1,12 +1,12 @@
 apiVersion: v2
-name: agent-swarm
+name: agent-smith
 description: Chat-driven Claude Code engineering teammates for a self-hosted homelab
 type: application
 version: 0.1.0
 appVersion: "0.1.0"
-home: https://github.com/sherodtaylor/agent-swarm
+home: https://github.com/sherodtaylor/agent-smith
 sources:
-  - https://github.com/sherodtaylor/agent-swarm
+  - https://github.com/sherodtaylor/agent-smith
 maintainers:
   - name: sherodtaylor
     url: https://github.com/sherodtaylor

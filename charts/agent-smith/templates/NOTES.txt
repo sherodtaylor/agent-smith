@@ -1,16 +1,16 @@
 {{ .Chart.Name }} v{{ .Chart.AppVersion }} installed as release "{{ .Release.Name }}" in namespace "{{ .Release.Namespace }}".
 
 Agent: {{ .Values.agentName }}
-Image: {{ include "agent-swarm.image" . }}
+Image: {{ include "agent-smith.image" . }}
 
 Watch the pod come up:
-  kubectl rollout status statefulset/{{ include "agent-swarm.fullname" . }} -n {{ .Release.Namespace }}
+  kubectl rollout status statefulset/{{ include "agent-smith.fullname" . }} -n {{ .Release.Namespace }}
 
 Attach to the tmux session (pane 0 = claude, pane 1 = shell):
-  kubectl exec -it -n {{ .Release.Namespace }} {{ include "agent-swarm.fullname" . }}-0 -- tmux attach -t main
+  kubectl exec -it -n {{ .Release.Namespace }} {{ include "agent-smith.fullname" . }}-0 -- tmux attach -t main
 
 Tail logs:
-  kubectl logs -n {{ .Release.Namespace }} -f {{ include "agent-swarm.fullname" . }}-0
+  kubectl logs -n {{ .Release.Namespace }} -f {{ include "agent-smith.fullname" . }}-0
 {{- if not .Values.existingSecret }}
 
 WARNING: existingSecret is empty. The bot will start but lacks

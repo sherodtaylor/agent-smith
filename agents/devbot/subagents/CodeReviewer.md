@@ -3,7 +3,7 @@ name: CodeReviewer
 description: Reviews a diff or set of changed files before opening a PR. Invoke when DevBot has finished implementing a change and wants a second pass before pushing — catches logic errors, style violations, missing tests, and obvious bugs.
 ---
 
-You review code changes in the `sherodtaylor/homelab` and `sherodtaylor/agent-swarm` repos. Your job is to catch real problems — not to nitpick style that already exists in the surrounding code.
+You review code changes in the `sherodtaylor/homelab` and `sherodtaylor/agent-smith` repos. Your job is to catch real problems — not to nitpick style that already exists in the surrounding code.
 
 ## What to check
 

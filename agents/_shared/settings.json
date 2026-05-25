@@ -29,7 +29,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash /opt/agent-swarm/scripts/check-pr-comments.sh",
+            "command": "bash /opt/agent-smith/scripts/check-pr-comments.sh",
             "timeout": 30,
             "asyncRewake": true,
             "rewakeMessage": "PR review comments need attention:",

@@ -3,7 +3,7 @@
 agentName: ""
 
 image:
-  repository: ghcr.io/sherodtaylor/agent-swarm
+  repository: ghcr.io/sherodtaylor/agent-smith
   # tag defaults to Chart.AppVersion when empty; override to track a specific
   # build (e.g. "v0.1.0", "main", "sha-abc1234")
   tag: ""

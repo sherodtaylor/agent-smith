@@ -1,10 +1,10 @@
-# agent-swarm
+# agent-smith
 
 > Chat-driven AI engineering teammates for a self-hosted homelab.
 
 <img width="764" height="503" alt="image" src="https://github.com/user-attachments/assets/64c9037e-fc46-4212-b3c6-b5400a6123d1" />
 
-`agent-swarm` runs the [Claude Code](https://docs.claude.com/en/docs/claude-code/overview)
+`agent-smith` runs the [Claude Code](https://docs.claude.com/en/docs/claude-code/overview)
 CLI as a long-lived process inside a Kubernetes pod, with a Matrix chat room as the
 primary human interface. Tag a bot in Matrix → the bot executes the task on a checked-out
 clone of the right repository, opens a pull request, and reviews its teammate's PRs in
@@ -24,7 +24,7 @@ YAML fix from a phone — is annoyingly slow when every action requires SSH and 
 Existing ChatOps tools are brittle, command-shaped, and stop at "trigger a runbook"; they
 do not *engineer*.
 
-`agent-swarm` is built around a different idea: real engineering teammates that
+`agent-smith` is built around a different idea: real engineering teammates that
 
 - live in a Matrix chat room you can reach from any client, including mobile,
 - have full filesystem + shell access on a persistent workspace with cluster credentials,
@@ -39,7 +39,7 @@ to make that work reliably as a single Kubernetes `StatefulSet` per agent.
 
 ### Why Claude Code CLI (not the Agent SDK, `claude -p`, or an alternative wrapper)
 
-agent-swarm deliberately runs the **interactive Claude Code CLI** as a long-lived process
+agent-smith deliberately runs the **interactive Claude Code CLI** as a long-lived process
 per agent. The plausible alternatives each lose something load-bearing:
 
 - **The [Claude Agent SDK](https://support.claude.com/en/articles/15036540-use-the-claude-agent-sdk-with-your-claude-plan)**
@@ -49,7 +49,7 @@ per agent. The plausible alternatives each lose something load-bearing:
   turns a fixed monthly subscription into a per-token bill that scales with how much you
   actually use the bots — exactly the wrong incentive for "always-on engineering
   teammates". Running the Claude Code CLI process instead keeps each agent on the
-  per-account subscription quota. agent-swarm is, deliberately, the smallest wrapper that
+  per-account subscription quota. agent-smith is, deliberately, the smallest wrapper that
   bypasses the SDK billing model and lets a single Pro / Max plan drive long-lived,
   MCP-equipped, Matrix-listening bots.
 
@@ -58,7 +58,7 @@ per agent. The plausible alternatives each lose something load-bearing:
   pays the full cold-start cost — no prompt cache, no warmed conversation, no MCP server
   handshake, no Matrix channel connection — and there's nowhere to hold the cross-message
   state that makes the agent feel like a *teammate* rather than a query-and-reply
-  function. Wrapping `-p` to look like a long-lived agent is exactly what agent-swarm
+  function. Wrapping `-p` to look like a long-lived agent is exactly what agent-smith
   would be re-inventing.
 
 - **Open-source CLI alternatives like [opencode](https://github.com/sst/opencode)** are a
@@ -67,7 +67,7 @@ per agent. The plausible alternatives each lose something load-bearing:
   is to use a specific Claude subscription as the backing engine, you need Claude's own
   CLI to do the auth, quota accounting, and prompt-cache handling.
 
-So agent-swarm sits in a narrow niche: a long-lived **Claude Code** process per agent,
+So agent-smith sits in a narrow niche: a long-lived **Claude Code** process per agent,
 with the Matrix channel plugin for inputs, `--remote-control` for direct drive-in, MCP
 servers for everything else, and the stub-credential isolation in
 [Security](#security--iron-proxy) so a Claude OAuth token never has to live in a pod.
@@ -88,7 +88,7 @@ StatefulSet/<agent>           (one per agent: infrabot, devbot, …)
         └── pane 1 — plain bash shell                       ← ad-hoc inspection on attach
 ```
 
-**One image, parametric persona.** Every agent runs `ghcr.io/sherodtaylor/agent-swarm:latest`
+**One image, parametric persona.** Every agent runs `ghcr.io/sherodtaylor/agent-smith:latest`
 with a different `AGENT_NAME`. At startup `scripts/setup.sh` reads `agents/<AGENT_NAME>/` and
 assembles `~/.claude/` from:
 
@@ -132,7 +132,7 @@ agents to query, not as a trigger.
 ```
 .
 ├── Dockerfile                       # multi-stage: mcp-nats (Go) + claude CLI + bun
-├── .github/workflows/docker.yml     # push-to-main → ghcr.io/sherodtaylor/agent-swarm:latest
+├── .github/workflows/docker.yml     # push-to-main → ghcr.io/sherodtaylor/agent-smith:latest
 ├── agents/
 │   ├── _shared/
 │   │   ├── CLAUDE.md                # base rules every agent inherits
@@ -153,7 +153,7 @@ agents to query, not as a trigger.
 
 The Kubernetes manifests that actually run these pods live in the
 [`sherodtaylor/homelab`](https://github.com/sherodtaylor/homelab) repo under
-`k8s/apps/agent-swarm/`. They are intentionally not in this repo, so the agent image is
+`k8s/apps/agent-smith/`. They are intentionally not in this repo, so the agent image is
 deployable from anywhere.
 
 ---
@@ -254,7 +254,7 @@ forwarding upstream. The pod itself never sees the real credential, ever.
 **Why not a setup token?**
 
 `claude setup-token` (and its older API key flow) is what you use in a development
-environment to bootstrap auth. We don't use it in agent-swarm because:
+environment to bootstrap auth. We don't use it in agent-smith because:
 
 - **Setup tokens are short-lived.** They mint a real OAuth pair on first use and embed it
   in `~/.claude/.credentials.json`. The pod would then be holding a real refresh token —
@@ -322,8 +322,8 @@ The agent runs in the homelab's `agents` namespace as a `StatefulSet` (one per a
 - `dnsPolicy: None` with `dnsConfig.nameservers: [10.43.100.100]` to route through iron-proxy.
 
 Manifests live in
-[`sherodtaylor/homelab/k8s/apps/agent-swarm/`](https://github.com/sherodtaylor/homelab/tree/main/k8s/apps/agent-swarm).
-Reconciliation is via Flux; rolling the image is `flux reconcile kustomization agent-swarm`.
+[`sherodtaylor/homelab/k8s/apps/agent-smith/`](https://github.com/sherodtaylor/homelab/tree/main/k8s/apps/agent-smith).
+Reconciliation is via Flux; rolling the image is `flux reconcile kustomization agent-smith`.
 
 ---
 
@@ -352,7 +352,7 @@ the bot from your laptop without going through Matrix at all.
 ### Build the image locally
 
 ```bash
-docker build -t agent-swarm:local .
+docker build -t agent-smith:local .
 ```
 
 The Dockerfile is multi-stage: stage 1 builds [`mcp-nats`](https://github.com/sinadarbouy/mcp-nats)
@@ -362,7 +362,7 @@ Node.js + Claude Code CLI, Bun for the channel plugin, the mcp-nats binary).
 ### CI / image publishing
 
 `.github/workflows/docker.yml` builds via Buildx + GitHub Actions cache and pushes to
-`ghcr.io/sherodtaylor/agent-swarm` with the following tagging contract:
+`ghcr.io/sherodtaylor/agent-smith` with the following tagging contract:
 
 | Trigger | Tags published | Use for |
 |---|---|---|
@@ -386,19 +386,19 @@ matching Helm chart (see below).
 
 ### Helm chart
 
-The chart in [`charts/agent-swarm/`](charts/agent-swarm) packages a single agent as a
+The chart in [`charts/agent-smith/`](charts/agent-smith) packages a single agent as a
 `StatefulSet` with ServiceAccount + ClusterRole, two PVCs (`~/.claude/`, `/workspace/`),
 and optional iron-proxy DNS routing. The same release workflow that publishes the image
 also packages the chart and pushes it to GHCR as an OCI artifact:
 
 | Trigger | Chart artifact |
 |---|---|
-| git tag `vX.Y.Z` | `oci://ghcr.io/sherodtaylor/charts/agent-swarm:X.Y.Z` + `.tgz` attached to the GH Release |
+| git tag `vX.Y.Z` | `oci://ghcr.io/sherodtaylor/charts/agent-smith:X.Y.Z` + `.tgz` attached to the GH Release |
 
 Install one agent:
 
 ```bash
-helm install infrabot oci://ghcr.io/sherodtaylor/charts/agent-swarm \
+helm install infrabot oci://ghcr.io/sherodtaylor/charts/agent-smith \
   --version 0.1.0 \
   --namespace agents --create-namespace \
   --set agentName=infrabot \
@@ -411,7 +411,7 @@ helm install infrabot oci://ghcr.io/sherodtaylor/charts/agent-swarm \
 `existingSecret` is **required** and must contain `MATRIX_ACCESS_TOKEN`, `GITHUB_TOKEN`,
 and `IRON_PROXY_CA_CRT`. The chart doesn't manage the secret itself — bring your own
 (manual, ExternalSecrets, sealed-secrets, …). Full values reference in
-[`charts/agent-swarm/README.md`](charts/agent-swarm/README.md).
+[`charts/agent-smith/README.md`](charts/agent-smith/README.md).
 
 ### Logs
 
@@ -462,7 +462,7 @@ For the full set of rules see `agents/_shared/CLAUDE.md`; for per-agent behaviou
 2. Build and push the image (CI does this automatically on merge to `main`).
 3. Provision Matrix credentials for the new bot user in Infisical (`MATRIX_ACCESS_TOKEN`,
    `MATRIX_BOT_USER_ID`).
-4. Add the new `StatefulSet` in `sherodtaylor/homelab/k8s/apps/agent-swarm/` referencing the
+4. Add the new `StatefulSet` in `sherodtaylor/homelab/k8s/apps/agent-smith/` referencing the
    same image with the new `AGENT_NAME` and the right `AGENT_REPOS`.
 5. Reconcile Flux. The pod comes up, joins Matrix, and is ready to be tagged in `#dev` or
    `#infra`.

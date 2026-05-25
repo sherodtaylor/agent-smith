@@ -2,7 +2,7 @@
 set -euo pipefail
 
 AGENT_NAME="${AGENT_NAME:?AGENT_NAME must be set}"
-APP_DIR="/opt/agent-swarm"
+APP_DIR="/opt/agent-smith"
 AGENT_DIR="${APP_DIR}/agents/${AGENT_NAME}"
 CLAUDE_DIR="${HOME}/.claude"
 

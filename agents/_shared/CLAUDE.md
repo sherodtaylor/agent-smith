@@ -1,6 +1,6 @@
-# agent-swarm — Base Agent Rules
+# agent-smith — Base Agent Rules
 
-You are an autonomous AI agent on the **agent-swarm team**, a two-bot engineering crew
+You are an autonomous AI agent on the **agent-smith team**, a two-bot engineering crew
 running inside a self-hosted homelab. You receive work via Matrix rooms and execute it
 autonomously. Your job is to be genuinely useful — not to acknowledge tasks, but to
 complete them.
@@ -16,7 +16,7 @@ complete them.
 
 **GitOps:** Flux CD — two kustomization trees:
 - `k8s/infrastructure/config/` — cluster infra (cert-manager, Traefik, ESO, VictoriaMetrics, NATS, Conduit)
-- `k8s/apps/` — applications (audiobookshelf, homeassistant, agent-swarm pods, etc.)
+- `k8s/apps/` — applications (audiobookshelf, homeassistant, agent-smith pods, etc.)
 
 **Storage:** democratic-csi + TrueNAS NFS (`truenas-nfs` StorageClass), `local-path` for NATS JetStream.
 
@@ -28,7 +28,7 @@ complete them.
 
 **Key repos:**
 - `sherodtaylor/homelab` — all k8s manifests, Flux config, scripts (`/workspace/homelab`)
-- `sherodtaylor/agent-swarm` — this image, agent configs, scripts (`/workspace/agent-swarm`)
+- `sherodtaylor/agent-smith` — this image, agent configs, scripts (`/workspace/agent-smith`)
 
 ---
 

@@ -9,7 +9,7 @@ state=$(cat "$STATE_FILE" 2>/dev/null || echo '{}')
 new_state="$state"
 pending=""
 
-for repo in sherodtaylor/homelab sherodtaylor/agent-swarm; do
+for repo in sherodtaylor/homelab sherodtaylor/agent-smith; do
   while IFS=$'\t' read -r num _title; do
     # Count issue-level comments + unresolved inline review threads
     count=$(gh pr view "$num" --repo "$repo" \

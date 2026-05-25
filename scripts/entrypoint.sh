@@ -10,10 +10,12 @@ echo "[entrypoint] agent=${AGENT_NAME} workdir=${WORKDIR}"
 # The matrix plugin + marketplace are registered in ~/.claude/settings.json
 # (extraKnownMarketplaces + enabledPlugins). --dangerously-load-development-channels
 # is required because the plugin is not on the official channel allowlist.
-# --remote-control is handled by pane 1 so this pane owns only the Matrix identity.
+# --remote-control on the same instance exposes this claude for remote drive-in
+# under a session name matching the agent (e.g. "infrabot").
 CLAUDE_CMD=(
   claude
   --dangerously-load-development-channels plugin:matrix@claude-code-channel-matrix
+  --remote-control "${AGENT_NAME}"
   --permission-mode bypassPermissions
 )
 
@@ -67,22 +69,20 @@ dispatch() {
 }
 
 if ! tmux has-session -t main 2>/dev/null; then
-  # Pane 0 (top): channels claude — Matrix-driven workhorse.
+  # Pane 0 (top): the one and only claude — Matrix-driven workhorse with
+  # remote-control enabled on the same session.
   tmux new-session -d -s main -x 220 -y 50 -c "${WORKDIR}"
   tmux pipe-pane -t main:0.0 -o 'cat >> /proc/1/fd/1'
   tmux send-keys -t main:0.0 "${CLAUDE_CMD[*]}" Enter
   dispatch main:0.0
 
-  # Pane 1 (bottom): remote-control claude with its own HOME. Authenticates via
-  # .credentials.json (iron-proxy injects real tokens). Separate HOME so it
-  # doesn't fight pane 0 over ~/.claude.json.
+  # Pane 1 (bottom): plain shell, for ad-hoc inspection / commands while
+  # attached. No second claude — pane 0 already owns the remote-control session.
   tmux split-window -v -t main:0 -c "${WORKDIR}"
   tmux pipe-pane -t main:0.1 -o 'cat >> /proc/1/fd/1'
-  tmux send-keys -t main:0.1 "HOME=/root/rc-home claude --remote-control --permission-mode bypassPermissions" Enter
-  dispatch main:0.1
 fi
 
-echo "[entrypoint] tmux 'main': pane 0 = channels, pane 1 = remote-control claude"
+echo "[entrypoint] tmux 'main': pane 0 = claude (channels + remote-control), pane 1 = shell"
 echo "[entrypoint] attach: kubectl exec -it -n agents ${AGENT_NAME}-0 -- tmux attach -t main"
 
 # Keep the container alive; exit if the tmux session dies.

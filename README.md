@@ -361,9 +361,27 @@ Node.js + Claude Code CLI, Bun for the channel plugin, the mcp-nats binary).
 
 ### CI / image publishing
 
-`.github/workflows/docker.yml` builds and pushes
-`ghcr.io/sherodtaylor/agent-swarm:latest` on every push to `main`. There is no separate
-tagging strategy yet — the homelab pod always tracks `latest`.
+`.github/workflows/docker.yml` builds via Buildx + GitHub Actions cache and pushes to
+`ghcr.io/sherodtaylor/agent-swarm` with the following tagging contract:
+
+| Trigger | Tags published | Use for |
+|---|---|---|
+| push to `main` | `:main`, `:sha-<short>` | dev / staging — `:main` moves with every merge; `:sha-…` is immutable |
+| git tag `vX.Y.Z` | `:vX.Y.Z`, `:vX.Y`, `:vX`, `:latest` | production — pin to whichever level of mutability you want |
+
+`:latest` only moves on a versioned release, **never on a push to `main`**, so a
+consumer that pins `:latest` won't get surprise breakage when an in-flight refactor
+lands. The image also carries OCI labels (`org.opencontainers.image.source`,
+`description`, `title`, `licenses`) so it renders properly on the GHCR package page.
+
+**Cutting a release:**
+
+```bash
+git tag -a v0.1.0 -m "Release v0.1.0 — …"
+git push origin v0.1.0
+```
+
+The workflow fires on the tag push and produces the four release tags above.
 
 ### Logs
 

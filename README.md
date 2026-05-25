@@ -2,6 +2,8 @@
 
 > Chat-driven AI engineering teammates for a self-hosted homelab.
 
+<img width="764" height="503" alt="image" src="https://github.com/user-attachments/assets/64c9037e-fc46-4212-b3c6-b5400a6123d1" />
+
 `agent-swarm` runs the [Claude Code](https://docs.claude.com/en/docs/claude-code/overview)
 CLI as a long-lived process inside a Kubernetes pod, with a Matrix chat room as the
 primary human interface. Tag a bot in Matrix → the bot executes the task on a checked-out

@@ -98,9 +98,29 @@ setup:
 - Runs as root in the init container, with `cwd=$HOME`.
 - Inherits every env var on the init container, including `GITHUB_TOKEN`
   (proxy-swapped via iron-proxy) and all keys from the `existingSecret`.
+- Executed via `bash -o pipefail -c`, so a `curl … | bash` pipeline that
+  fails on the upstream side (404, DNS, iron-proxy denial) is detected.
+  Multi-statement snippets are still your responsibility — `cmd1; cmd2; cmd3`
+  only observes the rightmost exit code; chain with `&&` or add your own
+  `set -e` if you need stop-on-first-failure semantics.
 - Best-effort: non-zero exit logs `[setup] env-init: warn — hook exited <rc>
   (continuing)` to stderr and the pod continues to start.
 - Runs on **every** pod boot. Your command is responsible for being
   idempotent.
-- Avoid writing to `~/.claude/` — those files were just assembled from the
-  baked-in agent persona and a careless command can clobber them.
+
+**Files your command must NOT clobber:**
+
+Standard dotfiles tools (chezmoi, yadm, stow, plain `ln -sf`) will happily
+overwrite files the chart already wrote. The hook runs AFTER these files
+exist, so any replacement strips the chart's defaults and breaks runtime:
+
+| Path | Why it's load-bearing |
+|------|----------------------|
+| `~/.claude/` (entire tree) | Assembled agent persona, MCP config, channel plugin credentials, settings |
+| `~/.gitconfig` | Contains `http.sslCAInfo=~/iron-proxy.crt` — required for iron-proxy MITM TLS on `git clone/pull/push` |
+| `~/.git-credentials` | Contains the real `GIT_GITHUB_TOKEN` for HTTPS push (env `GITHUB_TOKEN` is the proxy stub) |
+| `~/iron-proxy.crt` | iron-proxy CA, also referenced by `NODE_EXTRA_CA_CERTS` |
+| `/etc/ssl/certs/ca-certificates.crt` | System trust store; iron-proxy CA was appended via `update-ca-certificates` |
+
+If your installer manages any of these, either skip them in its config or
+restore the chart-managed values yourself at the end of the hook.

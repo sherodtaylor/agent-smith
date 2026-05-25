@@ -129,7 +129,11 @@ done
 # in place. Best-effort: a failure logs a warning and does NOT block the pod.
 if [ -n "${SETUP_COMMAND:-}" ]; then
   echo "[setup] env-init: running user hook"
-  if ( cd "${HOME}" && bash -c "${SETUP_COMMAND}" ); then
+  # `bash -o pipefail -c` ensures a failed `curl ... | bash` propagates the
+  # curl exit code through the pipeline — without this, a 404/DNS/iron-proxy
+  # denial silently yields exit 0 (bash reads EOF on an empty stream) and the
+  # hook lies "ok" while the pod boots with nothing installed.
+  if ( cd "${HOME}" && bash -o pipefail -c "${SETUP_COMMAND}" ); then
     echo "[setup] env-init: hook ok"
   else
     rc=$?

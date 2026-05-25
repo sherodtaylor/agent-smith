@@ -48,8 +48,9 @@ StatefulSet/<agent>           (one per agent: infrabot, devbot, …)
 └── init container: setup.sh  (assembles ~/.claude, installs plugin, clones repos)
 └── main container: entrypoint.sh
     └── tmux session "main"
-        ├── pane 0 — claude (channels mode, Matrix plugin)  ← receives Matrix messages
-        └── pane 1 — claude --remote-control (separate $HOME) ← interactive attach
+        ├── pane 0 — claude (channels + --remote-control)  ← receives Matrix messages
+        │                                                    + exposed for remote drive-in
+        └── pane 1 — plain bash shell                       ← ad-hoc inspection on attach
 ```
 
 **One image, parametric persona.** Every agent runs `ghcr.io/sherodtaylor/agent-swarm:latest`
@@ -60,20 +61,24 @@ assembles `~/.claude/` from:
 |---|---|---|
 | `agents/_shared/CLAUDE.md` + `agents/<name>/CLAUDE.md` (concatenated) | `~/.claude/CLAUDE.md` | base rules + persona |
 | `agents/_shared/settings.json` | `~/.claude/settings.json` | plugins, permissions, hooks |
+| `agents/_shared/.credentials.json` | `~/.claude/.credentials.json` | stub OAuth creds (iron-proxy swaps in real tokens at egress) |
 | `agents/<name>/mcp.json` | `~/.claude/.mcp.json` | per-agent MCP servers |
 | `agents/<name>/subagents/*.md` | `~/.claude/agents/*.md` | persona-specific subagents |
+
+**One claude per pod, channels + remote-control on the same instance.** The entrypoint
+launches a single `claude` process with both the Matrix channel plugin
+(`--dangerously-load-development-channels plugin:matrix@claude-code-channel-matrix`) and
+`--remote-control "${AGENT_NAME}"`. The same instance owns the Matrix identity *and* is
+remotely drivable — attaching the Claude desktop/web app picks up that named session. The
+second tmux pane is just a plain bash shell for ad-hoc inspection when you `tmux attach`.
 
 **Matrix as the channel.** `~/.claude/settings.json` registers the
 [`claude-code-channel-matrix`](https://github.com/zekker6/claude-code-channel-matrix)
 plugin via Claude Code's marketplace mechanism, and `setup.sh` writes the per-agent Matrix
-credentials and the sender allowlist to `~/.claude/channels/matrix/`. When the channels
-`claude` process starts in pane 0, every permitted message in a joined room becomes a
-Claude Code prompt for that agent.
-
-**Two panes, two `claude` processes.** Pane 0 owns the Matrix identity and is the workhorse.
-Pane 1 runs a second `claude --remote-control` with `HOME=/root/rc-home`, mirrored from the
-real home minus the channel plugin. It exists so a human (or the Claude desktop/web app) can
-attach to a running pod without fighting pane 0 over `~/.claude.json`.
+credentials and the sender allowlist to `~/.claude/channels/matrix/`. Every permitted
+message in a joined room becomes a Claude Code prompt for that agent — no separate
+listener, no message queue, no per-room wiring. The 👀 reaction the bot posts on
+acknowledgement comes from the same plugin.
 
 **Bots that watch their own PRs.** A `Stop`-hook (`scripts/check-pr-comments.sh`) runs after
 every turn, queries GitHub for unaddressed review comments on PRs this agent authored, and
@@ -107,7 +112,7 @@ agents to query, not as a trigger.
 │       └── subagents/               # CodeReviewer, TestWriter
 └── scripts/
     ├── setup.sh                     # init container: assemble ~/.claude, clone repos
-    ├── entrypoint.sh                # main container: launch tmux + two claude panes
+    ├── entrypoint.sh                # main container: launch tmux + claude (pane 0) + shell (pane 1)
     └── check-pr-comments.sh         # Stop-hook: rewake on unaddressed PR comments
 ```
 
@@ -153,7 +158,8 @@ Sourced from Infisical via ExternalSecrets in the homelab manifests, then handed
 | `MATRIX_ALLOWED_USERS` | no (default `@sherod:lab.sherodtaylor.dev`) | Comma-separated allowlist of senders the bot reacts to |
 | `GITHUB_TOKEN` | yes | **Placeholder** proxy token (`proxy-token-github`); iron-proxy swaps in the real PAT at egress |
 | `IRON_PROXY_CA_CRT` | yes | iron-proxy MITM CA; installed into the system trust store |
-| `SWARM_CLAUDE_CREDENTIALS` | no | Full JSON for `~/.claude/.credentials.json` (placeholder OAuth token; iron-proxy swaps); written mode-600 for the remote-control pane |
+
+> **Claude credentials are no longer an env var.** Earlier versions used `SWARM_CLAUDE_CREDENTIALS` to inject a real OAuth payload at startup, and prior to that a one-shot setup token. Both are gone — see [Claude credentials](#claude-credentials-stub--login-not-setup-token) below.
 
 ### Runtime environment variables
 
@@ -195,6 +201,51 @@ The shared settings file is what makes runtime behaviour consistent across agent
 - **`hooks.Stop`** — runs `scripts/check-pr-comments.sh` with `asyncRewake: true`; an exit
   code of `2` rewakes the agent with the rewake message so PR comments don't sit unanswered.
 
+### Claude credentials: stub + login, not setup-token
+
+In-cluster credentials live in `agents/_shared/.credentials.json`, committed to the repo
+as a **stub** OAuth payload:
+
+```json
+{"claudeAiOauth":{"accessToken":"access-token-stub","refreshToken":"refresh-token-stub", ...}}
+```
+
+`setup.sh` copies this file to `~/.claude/.credentials.json` (mode 600). Claude Code reads
+it, treats it as a valid signed-in session, and starts. Every request the CLI makes to
+`*.anthropic.com` then crosses iron-proxy, which sees the literal `access-token-stub`
+string in the `Authorization` header and rewrites it to the real OAuth token before
+forwarding upstream. The pod itself never sees the real credential, ever.
+
+**Why not a setup token?**
+
+`claude setup-token` (and its older API key flow) is what you use in a development
+environment to bootstrap auth. We don't use it in agent-swarm because:
+
+- **Setup tokens are short-lived.** They mint a real OAuth pair on first use and embed it
+  in `~/.claude/.credentials.json`. The pod would then be holding a real refresh token —
+  exactly the thing iron-proxy exists to prevent.
+- **They only work interactively.** `claude setup-token <code>` blocks on a browser flow
+  to get the code in the first place. A headless pod has no browser, so the only path was
+  to copy a credentials.json from a human's machine — which we used to do via
+  `SWARM_CLAUDE_CREDENTIALS` and which had all the rotation/secret-leak problems iron-proxy
+  was meant to solve.
+- **They get rotated by the upstream.** When Anthropic rotates a refresh token mid-flight,
+  the pod's credentials silently expire. With the stub-token flow there is nothing
+  rotating — iron-proxy holds the live credential and refreshes it on its own schedule.
+
+**Bootstrapping auth for a local dev clone.** If you want to drive a `claude` CLI from
+your own machine against this codebase (without going through iron-proxy), the supported
+flow is interactive:
+
+```bash
+claude /login
+```
+
+Pick the OAuth path, complete the browser flow. That writes a real
+`~/.claude/.credentials.json` on your laptop, and the rest of the repo (settings, MCP
+config, channels, hooks) Just Works against it. **Never copy that file into a pod** —
+that's the exact failure mode the stub + iron-proxy approach was introduced to fix.
+
 ---
 
 ## Security — iron-proxy
@@ -204,8 +255,10 @@ All agent egress runs through **iron-proxy** at ClusterIP `10.43.100.100`. This 
 swaps real secrets in at the network boundary. A leaked agent token is worthless outside
 the cluster.
 
-- Agents carry `proxy-token-github` and `proxy-token-claude` — literal placeholder
-  strings, never the real GitHub PAT or Claude OAuth token.
+- Agents carry `proxy-token-github` (GitHub) and the stub OAuth payload in
+  `agents/_shared/.credentials.json` (`access-token-stub` / `refresh-token-stub`) — literal
+  placeholder strings, never the real GitHub PAT or Claude OAuth tokens. See
+  [Claude credentials](#claude-credentials-stub--login-not-setup-token) for why.
 - iron-proxy MITMs all HTTPS egress, enforces a default-deny domain allowlist, and
   rewrites `Authorization` headers with the real credentials scoped to each host.
 - Agent DNS is pointed at iron-proxy (`dnsPolicy: None`). In-cluster names
@@ -247,14 +300,19 @@ Both tmux panes are recoverable from a shell on the pod:
 
 ```bash
 kubectl exec -it -n agents <agent>-0 -- tmux attach -t main
-# Ctrl-b o  toggles between pane 0 (channels) and pane 1 (remote-control)
+# Ctrl-b o  toggles between pane 0 (claude) and pane 1 (shell)
 # Ctrl-b d  detaches without killing anything
 ```
 
-Pane 0 is read-only in spirit — typing into it is fine, but the Matrix plugin is the
-source of truth for prompts. Pane 1 is yours: a normal `claude --remote-control` session
-that can also be claimed by the Claude desktop/web app once `SWARM_CLAUDE_CREDENTIALS` is
-provisioned.
+**Pane 0** is the single live `claude` process — it owns the Matrix identity *and* is
+exposed for remote drive-in. Typing into it is fine for ad-hoc prompts, but the Matrix
+plugin is the normal input path. Because the same process runs with `--remote-control
+<agent>`, the Claude desktop/web app can connect to that named session and you can drive
+the bot from your laptop without going through Matrix at all.
+
+**Pane 1** is just a plain `bash` shell in the same `${WORKDIR}` — useful for `kubectl`,
+`git status`, `flux logs`, peeking at `~/.claude/`, anything that doesn't belong in the
+`claude` REPL.
 
 ### Build the image locally
 

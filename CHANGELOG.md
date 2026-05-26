@@ -19,6 +19,10 @@ cut-a-release procedure.
 
 ## [Unreleased]
 
+---
+
+## [0.1.19] - 2026-05-26
+
 ### Fixed
 
 - **`entrypoint.sh` crash when dotfiles set `base-index 1`** — forces `base-index 0` and `pane-base-index 0` before creating the tmux session, so user dotfiles installed via `setup.command` can't shift window indices away from the expected `main:0.0` targets.
@@ -210,7 +214,8 @@ cut-a-release procedure.
 
 ---
 
-[Unreleased]: https://github.com/sherodtaylor/agent-smith/compare/v0.1.18...HEAD
+[Unreleased]: https://github.com/sherodtaylor/agent-smith/compare/v0.1.19...HEAD
+[0.1.19]: https://github.com/sherodtaylor/agent-smith/compare/v0.1.18...v0.1.19
 [0.1.18]: https://github.com/sherodtaylor/agent-smith/compare/v0.1.17...v0.1.18
 [0.1.17]: https://github.com/sherodtaylor/agent-smith/compare/v0.1.16...v0.1.17
 [0.1.16]: https://github.com/sherodtaylor/agent-smith/compare/v0.1.15...v0.1.16

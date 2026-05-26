@@ -77,16 +77,15 @@ if ! tmux has-session -t main 2>/dev/null; then
   # Name the window "claude" so pane targets use main:claude.0 / main:claude.1
   # instead of numeric indices. This survives dotfiles that set base-index 1,
   # which would shift window 0 to window 1 and break index-based targets.
-  # Start panes with bash explicitly — the user's default shell (zsh from dotfiles)
-  # may source workspace paths that don't exist, crashing the shell and killing
-  # the pane before send-keys has a chance to run.
-  tmux new-session -d -s main -n claude -x 220 -y 50 -c "${WORKDIR}" bash
+  # Start panes with zsh explicitly — consistent with the image default shell
+  # and dotfiles setup.
+  tmux new-session -d -s main -n claude -x 220 -y 50 -c "${WORKDIR}" zsh
   tmux pipe-pane -t main:claude.0 -o 'cat >> /proc/1/fd/1'
   tmux send-keys -t main:claude.0 "bash /opt/agent-smith/scripts/claude-loop.sh" Enter
   dispatch main:claude.0
 
   # Pane 1 (bottom): plain shell, for ad-hoc inspection / commands while attached.
-  tmux split-window -v -t main:claude -c "${WORKDIR}" bash
+  tmux split-window -v -t main:claude -c "${WORKDIR}" zsh
   tmux pipe-pane -t main:claude.1 -o 'cat >> /proc/1/fd/1'
 fi
 

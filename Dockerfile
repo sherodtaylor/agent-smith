@@ -18,7 +18,8 @@ ENV BUN_INSTALL=/usr/local
 RUN apt-get update && apt-get install -y --no-install-recommends \
       git curl wget ca-certificates gnupg unzip \
       zsh vim tmux jq \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && chsh -s /bin/zsh root
 
 # GitHub CLI
 RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \

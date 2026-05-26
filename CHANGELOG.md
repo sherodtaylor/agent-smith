@@ -21,7 +21,7 @@ cut-a-release procedure.
 
 ### Changed
 
-- **`entrypoint.sh` + `Dockerfile` — zsh as default shell** — tmux panes now start with `zsh` explicitly; `Dockerfile` sets zsh as root's default shell via `chsh`. Previously the workaround used `bash` to avoid dotfile-sourced crashes; paired dotfiles fix (guarded `source` calls in `zshrc`) makes zsh safe to use directly.
+- **`entrypoint.sh` — zsh panes** — tmux panes now start with `zsh` explicitly. Previously the workaround used `bash` to avoid dotfile-sourced crashes; paired dotfiles fix (guarded `source` calls in `zshrc`) makes zsh safe to use directly. Shell default is managed by dotfiles, not the image.
 
 ---
 

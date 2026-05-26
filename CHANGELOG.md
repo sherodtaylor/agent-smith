@@ -23,6 +23,7 @@ cut-a-release procedure.
 
 - `setup.sh` — writes real OAuth tokens from env (`CLAUDE_ACCESS_TOKEN`, `CLAUDE_REFRESH_TOKEN`, `CLAUDE_EXPIRES_AT`) when available, enabling Claude to self-refresh before token expiry. Falls back to stub credentials if env vars are absent.
 - `claude-loop.sh` — preserves `expiresAt` alongside `accessToken`/`refreshToken` when carrying real tokens forward across `claude` restarts.
+- **Dockerfile** — replaces `python3` with `jq`; all JSON manipulation in `setup.sh` and `claude-loop.sh` now uses `jq`.
 
 ---
 

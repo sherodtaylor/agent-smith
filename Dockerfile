@@ -17,7 +17,7 @@ ENV BUN_INSTALL=/usr/local
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
       git curl wget ca-certificates gnupg unzip \
-      zsh vim tmux python3 \
+      zsh vim tmux jq \
     && rm -rf /var/lib/apt/lists/*
 
 # GitHub CLI

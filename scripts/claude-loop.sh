@@ -24,22 +24,16 @@ while true; do
   _refresh=""
   _expires=""
   if [ -f "$CREDS_DST" ]; then
-    _existing=$(python3 -c "import json; d=json.load(open('$CREDS_DST')); print(d.get('claudeAiOauth',{}).get('accessToken',''))" 2>/dev/null || true)
-    _refresh=$(python3 -c "import json; d=json.load(open('$CREDS_DST')); print(d.get('claudeAiOauth',{}).get('refreshToken',''))" 2>/dev/null || true)
-    _expires=$(python3 -c "import json; d=json.load(open('$CREDS_DST')); print(d.get('claudeAiOauth',{}).get('expiresAt',''))" 2>/dev/null || true)
+    _existing=$(jq -r '.claudeAiOauth.accessToken  // ""' "$CREDS_DST" 2>/dev/null || true)
+    _refresh=$(jq  -r '.claudeAiOauth.refreshToken // ""' "$CREDS_DST" 2>/dev/null || true)
+    _expires=$(jq  -r '.claudeAiOauth.expiresAt    // ""' "$CREDS_DST" 2>/dev/null || true)
   fi
   if [ -n "$_existing" ] && [ "$_existing" != "access-token-stub" ]; then
-    CREDS_TOKEN="$_existing" CREDS_REFRESH="${_refresh:-refresh-token-stub}" CREDS_EXPIRES="${_expires:-9999999999999}" \
-      python3 -c "
-import json, os
-d = json.load(open('$CREDS_SRC'))
-d['claudeAiOauth']['accessToken'] = os.environ['CREDS_TOKEN']
-d['claudeAiOauth']['refreshToken'] = os.environ['CREDS_REFRESH']
-expires = os.environ['CREDS_EXPIRES']
-if expires and expires not in ('', 'None'):
-    d['claudeAiOauth']['expiresAt'] = int(expires)
-open('$CREDS_DST', 'w').write(json.dumps(d))
-"
+    jq --arg access "$_existing" \
+       --arg refresh "${_refresh:-refresh-token-stub}" \
+       --argjson expires "${_expires:-9999999999999}" \
+       '.claudeAiOauth.accessToken = $access | .claudeAiOauth.refreshToken = $refresh | .claudeAiOauth.expiresAt = $expires' \
+       "$CREDS_SRC" > "$CREDS_DST"
     echo "[claude-loop] credentials refreshed (real tokens preserved from prior refresh)"
   else
     cp "$CREDS_SRC" "$CREDS_DST"

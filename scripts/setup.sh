@@ -28,17 +28,13 @@ fi
 # (e.g. first boot before refresh-claude-creds.sh has run), in which case
 # iron-proxy's header swap keeps the agent functional but self-refresh won't work.
 if [ -n "${CLAUDE_ACCESS_TOKEN:-}" ] && [ "${CLAUDE_ACCESS_TOKEN}" != "access-token-stub" ]; then
-  python3 - <<PY
-import json, os
-d = json.load(open('${APP_DIR}/agents/_shared/.credentials.json'))
-o = d['claudeAiOauth']
-o['accessToken']  = os.environ['CLAUDE_ACCESS_TOKEN']
-o['refreshToken'] = os.environ.get('CLAUDE_REFRESH_TOKEN', o['refreshToken'])
-expires = os.environ.get('CLAUDE_EXPIRES_AT', '')
-if expires and expires != 'null':
-    o['expiresAt'] = int(expires)
-json.dump(d, open('${CLAUDE_DIR}/.credentials.json', 'w'))
-PY
+  jq --arg access "$CLAUDE_ACCESS_TOKEN" \
+     --arg refresh "${CLAUDE_REFRESH_TOKEN:-}" \
+     --arg expires "${CLAUDE_EXPIRES_AT:-}" \
+     '.claudeAiOauth.accessToken = $access
+     | if $refresh != "" then .claudeAiOauth.refreshToken = $refresh else . end
+     | if ($expires != "" and $expires != "null") then .claudeAiOauth.expiresAt = ($expires | tonumber) else . end' \
+     "${APP_DIR}/agents/_shared/.credentials.json" > "${CLAUDE_DIR}/.credentials.json"
   chmod 600 "${CLAUDE_DIR}/.credentials.json"
   echo "[setup] wrote real credentials from env (self-refresh enabled)"
 else
@@ -67,23 +63,15 @@ echo "[setup] assembled ~/.claude for ${AGENT_NAME}"
 
 # Mark first-run onboarding complete and pre-trust the agent's workspace repos,
 # so `claude` started headless doesn't block on the theme picker or trust dialog.
-python3 - <<'PY'
-import json, os
-p = os.path.expanduser("~/.claude.json")
-try:
-    d = json.load(open(p))
-except Exception:
-    d = {}
-d["hasCompletedOnboarding"] = True
-projects = d.setdefault("projects", {})
-for repo in os.environ.get("AGENT_REPOS", "sherodtaylor/homelab").split():
-    path = "/workspace/" + repo.split("/")[-1]
-    proj = projects.setdefault(path, {})
-    proj["hasTrustDialogAccepted"] = True
-    proj["hasTrustDialogBashAccepted"] = True
-    proj["hasCompletedProjectOnboarding"] = True
-json.dump(d, open(p, "w"))
-PY
+_claude_json="${HOME}/.claude.json"
+[ -f "$_claude_json" ] || echo '{}' > "$_claude_json"
+jq '.hasCompletedOnboarding = true' "$_claude_json" > "${_claude_json}.tmp" && mv "${_claude_json}.tmp" "$_claude_json"
+for repo in ${AGENT_REPOS:-sherodtaylor/homelab}; do
+  _path="/workspace/$(basename "$repo")"
+  jq --arg p "$_path" \
+    '.projects[$p].hasTrustDialogAccepted = true | .projects[$p].hasTrustDialogBashAccepted = true | .projects[$p].hasCompletedProjectOnboarding = true' \
+    "$_claude_json" > "${_claude_json}.tmp" && mv "${_claude_json}.tmp" "$_claude_json"
+done
 echo "[setup] marked onboarding complete + pre-trusted workspace repos"
 
 # Install the Matrix channel plugin from its marketplace. settings.json registers
@@ -101,11 +89,9 @@ EOF
 
 # Access allowlist — who may trigger this bot
 ALLOWED="${MATRIX_ALLOWED_USERS:-@sherod:lab.sherodtaylor.dev}"
-python3 - "$ALLOWED" > "${CLAUDE_DIR}/channels/matrix/access.json" <<'PY'
-import json, sys
-users = [u.strip() for u in sys.argv[1].split(",") if u.strip()]
-print(json.dumps({"allowedUsers": users, "ackReaction": "👀"}, indent=2))
-PY
+jq -Rn --arg allowed "$ALLOWED" \
+  '{"allowedUsers": [$allowed | split(",")[] | ltrimstr(" ") | rtrimstr(" ") | select(length > 0)], "ackReaction": "👀"}' \
+  > "${CLAUDE_DIR}/channels/matrix/access.json"
 echo "[setup] wrote Matrix channel config"
 
 # git / gh auth — GITHUB_TOKEN is already in the environment, so `gh` uses it

@@ -21,7 +21,7 @@ cut-a-release procedure.
 
 ### Changed
 
-- **`entrypoint.sh` — zsh panes** — tmux panes now start with `zsh` explicitly. Previously the workaround used `bash` to avoid dotfile-sourced crashes; paired dotfiles fix (guarded `source` calls in `zshrc`) makes zsh safe to use directly. Shell default is managed by dotfiles, not the image.
+- **`entrypoint.sh` + `Dockerfile` — decouple shell from image** — removed `zsh` from the Dockerfile and explicit shell from tmux pane starts. Panes now use `$SHELL` (bash by default); set `SHELL=/bin/zsh` in `extraEnv` or let dotfiles configure it. The image is no longer opinionated about the user's shell environment.
 
 ---
 

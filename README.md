@@ -42,38 +42,12 @@ VictoriaMetrics / VictoriaLogs. These agents ship work that ends up in `main`.
 
 ### Why Claude Code CLI (not the Agent SDK, `claude -p`, or an alternative wrapper)
 
-agent-smith deliberately runs the **interactive Claude Code CLI** as a long-lived process
-per agent. The plausible alternatives each lose something load-bearing:
+The interactive CLI is the only option that is long-lived, subscription-billed, and
+MCP-capable at the same time:
 
-- **The [Claude Agent SDK](https://support.claude.com/en/articles/15036540-use-the-claude-agent-sdk-with-your-claude-plan)**
-  is the obvious-looking pick for "build a bot on Claude" — but programmatic SDK use is
-  billed as Anthropic API consumption, *separate* from a Claude Pro / Max subscription.
-  For an always-on crew answering dozens of Matrix messages a day across multiple agents,
-  that turns a fixed monthly subscription into a per-token bill that scales with how much
-  you actually use the bots — exactly the wrong incentive for "always-on engineering
-  teammates". Running the Claude Code CLI process instead keeps each agent on the
-  per-account subscription quota. agent-smith is, deliberately, the smallest wrapper that
-  bypasses the SDK billing model and lets a single Pro / Max plan drive long-lived,
-  MCP-equipped, Matrix-listening bots.
-
-- **`claude -p` (Claude Code print mode)** *is* on subscription quota, but it's
-  single-shot: one prompt in, one response out, then the process exits. Every invocation
-  pays the full cold-start cost — no prompt cache, no warmed conversation, no MCP server
-  handshake, no Matrix channel connection — and there's nowhere to hold the cross-message
-  state that makes the agent feel like a *teammate* rather than a query-and-reply
-  function. Wrapping `-p` to look like a long-lived agent is exactly what agent-smith
-  would be re-inventing.
-
-- **Open-source CLI alternatives like [opencode](https://github.com/sst/opencode)** are a
-  good fit for interactive single-user work against a self-hosted or third-party LLM, but
-  they don't get you the *Claude account* itself — you bring your own model. If the goal
-  is to use a specific Claude subscription as the backing engine, you need Claude's own
-  CLI to do the auth, quota accounting, and prompt-cache handling.
-
-So agent-smith sits in a narrow niche: a long-lived **Claude Code** process per agent,
-with the Matrix channel plugin for inputs, `--remote-control` for direct drive-in, MCP
-servers for everything else, and the stub-credential isolation in
-[Security](#security--iron-proxy) so a Claude OAuth token never has to live in a pod.
+- **[Agent SDK](https://support.claude.com/en/articles/15036540-use-the-claude-agent-sdk-with-your-claude-plan)** — billed as Anthropic API tokens, not a Pro/Max subscription. An always-on crew turns a flat monthly cost into a per-token meter.
+- **`claude -p`** — subscription quota, but exits after each response. No persistent state, no warm prompt cache, no MCP handshake.
+- **Alternatives (opencode, etc.)** — you supply the model. Can't drive a Claude subscription.
 
 ---
 

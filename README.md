@@ -1,54 +1,44 @@
 # agent-smith
 
-> A persistent engineering workforce. Not a ChatOps wrapper — teammates that engineer.
+> Your engineering team, running in Kubernetes.
 
 <img width="764" height="503" alt="image" src="https://github.com/user-attachments/assets/64c9037e-fc46-4212-b3c6-b5400a6123d1" />
 
-Real engineering work — bumping a Helm chart, diagnosing a `CrashLoopBackOff`, shipping a
-YAML fix from a phone, reviewing a teammate's PR end-to-end — is slow when every action
-requires SSH and `kubectl`, and impossible to delegate when the only tools available are
-command-shaped ChatOps wrappers that stop at "trigger a runbook." Existing tools relay
-intent; they do not *engineer*.
-
 `agent-smith` deploys [Claude Code](https://docs.claude.com/en/docs/claude-code/overview)
-as persistent, long-lived agents inside Kubernetes pods. Each agent has full filesystem
-and shell access on a workspace with cluster credentials, follows the same git workflow as
-a human teammate, and keeps working autonomously until the task is done. You can reach
-them from a Matrix room, from your phone, or from the Claude desktop app — but the
-interface is incidental. The engineering is the point.
+as persistent, long-lived engineering agents inside Kubernetes pods. Each agent has a
+permanent workspace with real cluster credentials, follows the same git workflow as a
+human teammate, and works autonomously until the task is done — feature branches,
+conventional commits, pull requests, review comments addressed, merged.
 
-The current workforce is two agents — **InfraBot** for k3s/Flux and **DevBot** for code —
-but the container image is parametric: drop in a new `agents/<name>/` config and you have
-a third teammate from the same image.
+The current team is two agents — **InfraBot** for k3s/Flux and **DevBot** for code —
+but the container image is parametric: one new `agents/<name>/` directory and you have a
+third teammate.
 
 ---
 
-## What makes this different from ChatOps
+## What your team can do
 
-ChatOps tools relay intent. They translate a slash command into an API call and report the
-result. The human still owns the decision loop: read the output, decide what's next, issue
-the next command.
+Each agent:
 
-`agent-smith` agents own the decision loop themselves:
+- **Owns a persistent workspace** — full filesystem + shell access on a long-lived volume
+  with real cluster credentials. Work carries over across sessions; context isn't lost on
+  restart.
+- **Follows the full engineering workflow** — reads the code, writes the fix, opens the
+  PR, waits for review, addresses comments, merges. The whole loop, autonomously.
+- **Watches its own PRs** — a `Stop`-hook reruns the agent when unaddressed review
+  comments appear. No human prompt required to close the loop.
+- **Coordinates with teammates** — one agent opens a PR, the other reviews it end-to-end
+  and posts inline findings. NATS is the durable audit log for every team action.
+- **Never holds production secrets** — stub tokens are swapped for real credentials at the
+  network boundary by an egress firewall (see [Security](#security--iron-proxy)). A
+  compromised pod can't reach outside the allowlist.
 
-- **Persistent workspace** — full filesystem + shell access on a long-lived volume with
-  real cluster credentials, not a stateless function that exits after one tool call.
-- **Real git workflow** — feature branches, conventional commits, pull requests, the same
-  sequence a human teammate would follow. Not "trigger deploy"; *write the code, open the
-  PR, wait for review, address comments, merge*.
-- **Autonomous follow-through** — a `Stop`-hook reruns the agent when unaddressed review
-  comments land on a PR it authored. The agent addresses them without a human prompt.
-- **Cross-agent coordination** — one agent opens a PR, the other reviews it end-to-end
-  and posts inline findings. They coordinate through Matrix mentions; NATS is the durable
-  audit log.
-- **Credential isolation** — agents never hold real GitHub or Claude credentials. Stub
-  tokens are swapped for real ones at the network boundary by an egress firewall
-  (see [Security](#security--iron-proxy)). A compromised pod can't leak production secrets.
+Reach them from a Matrix room, from your phone, or via the Claude desktop app. The
+interface is up to you; the engineering capability is always there.
 
-The runtime is built for that responsibility: a single Kubernetes `StatefulSet` per agent,
-GitOps-managed via Flux, secrets sourced from Infisical via ExternalSecrets, full
-observability through VictoriaMetrics / VictoriaLogs. These are not toys: they ship work
-that ends up in `main`.
+The runtime is production-grade: one Kubernetes `StatefulSet` per agent, GitOps-managed
+via Flux, secrets from Infisical via ExternalSecrets, full observability through
+VictoriaMetrics / VictoriaLogs. These agents ship work that ends up in `main`.
 
 ### Why Claude Code CLI (not the Agent SDK, `claude -p`, or an alternative wrapper)
 

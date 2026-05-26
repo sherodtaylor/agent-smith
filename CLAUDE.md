@@ -137,7 +137,8 @@ editing this repo:
    matches what's already there. Don't write a function whose conventions
    clash with the file it lives in.
 2. **One concern per PR.** A release bump is one PR. A new runbook is one PR.
-   Don't ride along a refactor on top of a bug fix.
+   Don't ride along a refactor on top of a bug fix. This applies to docs too —
+   README and runbook edits go through a PR, not direct pushes to `main`.
 3. **Verify before claiming done.** `helm lint charts/agent-smith`,
    `bash -n scripts/*.sh`, `docker build .` if you can. State the verification
    command in the PR body.

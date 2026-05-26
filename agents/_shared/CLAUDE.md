@@ -94,6 +94,9 @@ other agent to handle it.
 (original message + any intermediate replies) before answering. The reply may assume
 knowledge of what was said earlier. Reference the original if it clarifies your response.
 
+**How Matrix replies work — read before the style rules below:**
+Matrix messages arrive as `<channel source="matrix" room_id="!…" sender="@…" event_id="$…" room_name="#…">` events in your session. Your normal text output stays in the terminal and does **not** reach Matrix automatically. To post anything in a room you must call the `reply` tool from the matrix channel, passing the `room_id` from the incoming `<channel>` tag. Every post in the narration pattern below — plan, each transition note, final result — requires a separate `reply` call. No call = Sherod sees nothing.
+
 **Communication style — narrate as you work, every time:**
 
 The room should see your reasoning unfold, not just the final answer. Anyone reading
@@ -133,16 +136,16 @@ Update the room as tasks move from pending → in_progress → completed.
 **Pattern:**
 
 1. Receive task → `TaskCreate` each step.
-2. Post in the room (one message):
+2. Call `reply` with the plan (one message):
    ```
    plan:
    1. <subject of task 1>
    2. <subject of task 2>
    3. <subject of task 3>
    ```
-3. As you complete each step, `TaskUpdate` to `completed`. Post a brief line:
+3. As you complete each step, `TaskUpdate` to `completed`. Call `reply` with a brief line:
    - "1/3 done — manifests render clean. Starting helm template."
-4. On finish, post the final result line with a verification command.
+4. On finish, call `reply` with the final result line and a verification command.
 
 If a task expands mid-flight (new sub-step discovered), `TaskCreate` it and call out
 the addition: "found: needs an RBAC binding too — added as step 4."

@@ -46,19 +46,35 @@ If a feature can't be tied to a promise, it doesn't belong in v1.
 | **P4** | **Memory compounds** | Agents recall their own past decisions and each other's. Knowledge accumulates over months; agents don't get repeatedly stuck on the same problem. |
 | **P5** | **Work originates** | Bots don't only respond to pings — they pick up stale PRs, dep bumps, CI rot, and incident triage on their own cadence. The crew has work even when Sherod is asleep. |
 
-## What v1 explicitly does NOT promise
+## Future considerations
 
-Naming these reduces drift. If something on this list becomes urgent later,
-revisit — but don't let it sneak in without justification.
+Items we've thought through, have a position on, and intentionally placed
+beyond v1. Each has a clear trigger that would pull it forward.
 
-- **Model portability.** We are Claude-native. The leverage of CLAUDE.md +
-  MCP + plugin marketplace + the Matrix channel plugin is too high to give
-  up for an abstract "what if we want Hermes" win.
-- **Federation across organizations.** Single operator, single trust
-  boundary. DIDs and decentralized discovery solve problems we don't have.
-- **Universal syscall observability.** iron-proxy controls egress;
-  VictoriaLogs captures stdout/stderr. eBPF only earns its weight if bots
-  ingest untrusted input — they don't today.
+- **Model portability — a harness-agnostic agent loop.** Today we run on
+  Claude Code, and the leverage of CLAUDE.md + MCP + the plugin
+  marketplace + the Matrix channel plugin is exactly why the crew works.
+  A future agent layer could abstract the LLM so local models (Hermes,
+  Llama) can run cheap sub-agent dispatch (classification, embeddings,
+  low-stakes tool calls) while Claude stays on the main loop. **Pull
+  forward when:** a second model becomes load-bearing for cost or
+  latency reasons we can measure.
+- **Decentralized agent discovery (DID / registry).** A `team.yaml` is
+  enough while a single operator runs all agents. A future where agents
+  span trust boundaries — multiple operators, cross-org collaboration,
+  agents that join the swarm without being pre-provisioned — wants
+  DIDs, a registry, or a federated MCP catalog. **Pull forward when:**
+  the crew grows past ~5 agents OR an agent runs outside this trust
+  boundary.
+- **Syscall-level observability via eBPF.** iron-proxy controls egress
+  and VictoriaLogs captures stdout/stderr, which is enough today
+  because bots only ingest input from the Matrix allowlist. A future
+  posture that accepts untrusted input (third-party MCP servers,
+  webhook triggers, user-submitted scripts) wants per-process syscall
+  audit, file-write tracking, and fork-chain visibility. **Pull
+  forward when:** bots take untrusted input, OR an incident shows
+  application-layer logs were not enough to reconstruct what
+  happened.
 
 ---
 
@@ -161,7 +177,8 @@ v1.2  Theme D scaled
         - First proactive workflow: stale-PR sweep
         - Second ephemeral agent type (TBD with Sherod)
 
-v2.x  Revisit the explicit non-promises only if a concrete use case appears
+v2.x  Future considerations pulled forward as their triggers fire
+        (model portability, federated discovery, syscall observability)
 ```
 
 ---
@@ -199,9 +216,9 @@ For traceability, here's where each of your original v1 candidates landed.
 | Orchestration Hub for debugging | B | **In v1.0** — mandatory prerequisite for ephemerals |
 | Native KB integration | A | **In v1.1** — pairs with memory; read-only MCP first |
 | Ephemeral Agents | D | **In v1.1** — pilot with `pr-reviewer`, then expand |
-| Harness Agnostic (decoupled from Claude) | — | **Deferred** — explicit non-promise; revisit only with a concrete second-model use case |
-| Decentralized agent discovery (DID / registry) | — | **Deferred** — explicit non-promise; `team.yaml` is enough for now |
-| Native eBPF for networking/security | — | **Deferred** — iron-proxy + VictoriaLogs sufficient until bots ingest untrusted input |
+| Harness Agnostic (decoupled from Claude) | — | **Future consideration** — pull forward when a second model becomes load-bearing for cost or latency we can measure |
+| Decentralized agent discovery (DID / registry) | — | **Future consideration** — pull forward when the crew grows past ~5 agents or spans trust boundaries; `team.yaml` carries us until then |
+| Native eBPF for networking/security | — | **Future consideration** — pull forward when bots take untrusted input, or when an incident shows application-layer logs were not enough |
 
 **Net adds** (not on original list, surfaced by promise analysis):
 - Per-agent capability scopes (P3)

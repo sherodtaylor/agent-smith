@@ -132,16 +132,17 @@ done
 # per-user tooling, extra credentials). Runs after CA/git/.claude/repos are
 # in place. Best-effort: a failure logs a warning and does NOT block the pod.
 if [ -n "${SETUP_COMMAND:-}" ]; then
-  echo "[setup] env-init: running user hook (120s timeout)"
+  _SETUP_TIMEOUT="${SETUP_TIMEOUT_SECONDS:-600}"
+  echo "[setup] env-init: running user hook (${_SETUP_TIMEOUT}s timeout)"
   # `bash -o pipefail -c` ensures a failed `curl ... | bash` propagates the
   # curl exit code through the pipeline — without this, a 404/DNS/iron-proxy
   # denial silently yields exit 0 (bash reads EOF on an empty stream) and the
   # hook lies "ok" while the pod boots with nothing installed.
   #
-  # `timeout 120` hard-caps the init container's exposure to a hung command
-  # (slow dotfiles host, apt/dpkg lock wait, etc.); exit 124 from timeout
-  # falls through the warn-and-continue path like any other non-zero exit.
-  if ( cd "${HOME}" && timeout 120 bash -o pipefail -c "${SETUP_COMMAND}" ); then
+  # Default timeout is 600s — enough for a full dotfiles install including
+  # apt packages, toolchain downloads (nvm, rustup, etc.). Override via
+  # SETUP_TIMEOUT_SECONDS env var if you need more or less time.
+  if ( cd "${HOME}" && timeout "$_SETUP_TIMEOUT" bash -o pipefail -c "${SETUP_COMMAND}" ); then
     echo "[setup] env-init: hook ok"
   else
     rc=$?

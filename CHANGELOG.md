@@ -19,6 +19,10 @@ cut-a-release procedure.
 
 ## [Unreleased]
 
+### Changed
+
+- **`entrypoint.sh` + `Dockerfile` — decouple shell from image** — removed `zsh` from the Dockerfile and explicit shell from tmux pane starts. Panes now use `$SHELL` (bash by default); set `SHELL=/bin/zsh` in `extraEnv` or let dotfiles configure it. The image is no longer opinionated about the user's shell environment.
+
 ---
 
 ## [0.1.20] - 2026-05-26

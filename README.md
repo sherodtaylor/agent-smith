@@ -1,6 +1,6 @@
 # agent-smith
 
-> Chat-driven AI engineering agents for a k8.
+> An autonomous engineering crew that ships real work against a real Kubernetes cluster.
 
 <img width="764" height="503" alt="image" src="https://github.com/user-attachments/assets/64c9037e-fc46-4212-b3c6-b5400a6123d1" />
 
@@ -19,23 +19,27 @@ a third teammate from the same image.
 
 ## The problem this solves
 
-Routine homelab work — bumping a Helm chart, diagnosing a `CrashLoopBackOff`, applying a
-YAML fix from a phone — is annoyingly slow when every action requires SSH and `kubectl`.
-Existing ChatOps tools are brittle, command-shaped, and stop at "trigger a runbook"; they
-do not *engineer*.
+Real engineering work — bumping a Helm chart, diagnosing a `CrashLoopBackOff`, shipping a
+YAML fix from a phone, reviewing a teammate's PR end-to-end — is slow when every action
+requires SSH and `kubectl`, and impossible to delegate when the only tools available are
+command-shaped ChatOps wrappers that stop at "trigger a runbook." Existing tools relay
+intent; they do not *engineer*.
 
 `agent-smith` is built around a different idea: real engineering teammates that
 
-- live in a Matrix chat room you can reach from any client, including mobile,
+- live in a Matrix chat room reachable from any client, including mobile,
 - have full filesystem + shell access on a persistent workspace with cluster credentials,
-- follow the same git workflow you do (feature branches, conventional commits, PRs),
+- follow the same git workflow a human teammate would (feature branches, conventional
+  commits, PRs),
 - coordinate among themselves — one bot opens a PR, the other reviews it,
 - pick up follow-up automatically when review comments land on a PR they authored,
 - never actually hold the real GitHub or Claude credentials — those are swapped in at the
   network boundary by an egress credential firewall (see [Security](#security--iron-proxy)).
 
-Everything else — the image layout, the init container, the tmux dance, the hooks — exists
-to make that work reliably as a single Kubernetes `StatefulSet` per agent.
+The runtime is built for that responsibility: a single Kubernetes `StatefulSet` per agent,
+GitOps-managed via Flux, secrets sourced from Infisical via ExternalSecrets, full
+observability through VictoriaMetrics / VictoriaLogs, and a strict per-agent capability
+scope at the egress layer. Bots are not toys: they ship work that ends up in `main`.
 
 ### Why Claude Code CLI (not the Agent SDK, `claude -p`, or an alternative wrapper)
 
@@ -45,9 +49,9 @@ per agent. The plausible alternatives each lose something load-bearing:
 - **The [Claude Agent SDK](https://support.claude.com/en/articles/15036540-use-the-claude-agent-sdk-with-your-claude-plan)**
   is the obvious-looking pick for "build a bot on Claude" — but programmatic SDK use is
   billed as Anthropic API consumption, *separate* from a Claude Pro / Max subscription.
-  For a homelab answering dozens of Matrix messages a day across multiple agents, that
-  turns a fixed monthly subscription into a per-token bill that scales with how much you
-  actually use the bots — exactly the wrong incentive for "always-on engineering
+  For an always-on crew answering dozens of Matrix messages a day across multiple agents,
+  that turns a fixed monthly subscription into a per-token bill that scales with how much
+  you actually use the bots — exactly the wrong incentive for "always-on engineering
   teammates". Running the Claude Code CLI process instead keeps each agent on the
   per-account subscription quota. agent-smith is, deliberately, the smallest wrapper that
   bypasses the SDK billing model and lets a single Pro / Max plan drive long-lived,

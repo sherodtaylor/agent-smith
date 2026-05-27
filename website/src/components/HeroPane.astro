@@ -1,0 +1,37 @@
+---
+interface Props {
+  prompt?: string;
+  tagline: string;
+  sub: string;
+  ctas: { label: string; href: string }[];
+}
+const { prompt = '$', tagline, sub, ctas } = Astro.props;
+---
+<section class="hero-pane">
+  <div class="prompt-line">
+    <span class="prompt">{prompt}</span>
+    <span class="cmd">agent-smith --hello</span>
+  </div>
+  <h1>{tagline}</h1>
+  <p class="sub">{sub}</p>
+  <div class="ctas">
+    {ctas.map(c => <a class="cta" href={c.href}>{c.label}</a>)}
+  </div>
+</section>
+
+<style>
+  .hero-pane {
+    background: var(--bg-elev); padding: var(--space-12);
+    border-radius: 6px; min-height: 380px;
+  }
+  .prompt-line { font-family: var(--font-mono); font-size: var(--fs-mono); color: var(--fg-muted); margin-bottom: var(--space-8); }
+  .prompt { color: var(--accent); margin-right: var(--space-2); }
+  .sub    { color: var(--fg-muted); max-width: var(--measure); margin: var(--space-6) 0 var(--space-12); }
+  .ctas   { display: flex; gap: var(--space-4); flex-wrap: wrap; }
+  .cta    {
+    font-family: var(--font-mono); padding: var(--space-3) var(--space-6);
+    border: 1px solid var(--accent); color: var(--accent); text-decoration: none;
+    border-radius: 4px; transition: background 120ms ease;
+  }
+  .cta:hover, .cta:focus { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+</style>

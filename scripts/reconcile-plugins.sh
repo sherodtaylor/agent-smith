@@ -34,9 +34,26 @@ if [ ! -f "${SETTINGS}" ]; then
   exit 0
 fi
 
-# ── Phase 1: marketplace registration ─────────────────────────────────────
-# TODO(Task 7): iterate extraKnownMarketplaces and run `claude marketplace add`
-# for any marketplace not yet registered.
+# ── Phase 1: marketplaces (registration + refresh) ────────────────────────
+if [ -f "${SETTINGS}" ]; then
+  marketplace_names=$(jq -r '.extraKnownMarketplaces // {} | keys[]' "${SETTINGS}" 2>/dev/null || true)
+  for marketplace_name in ${marketplace_names}; do
+    source_repo=$(jq -r ".extraKnownMarketplaces.\"${marketplace_name}\".source.repo // empty" "${SETTINGS}" 2>/dev/null || true)
+    if [ -z "${source_repo}" ]; then
+      warn "${marketplace_name}: no source.repo in settings.json — skipping"
+      continue
+    fi
+
+    # Idempotent: `claude plugin marketplace add` no-ops if already registered.
+    if ! claude plugin marketplace add "${source_repo}" 2>&1; then
+      warn "${marketplace_name}: marketplace add failed (continuing)"
+    fi
+
+    if ! claude plugin marketplace update "${marketplace_name}" 2>&1; then
+      warn "${marketplace_name}: marketplace update failed (continuing)"
+    fi
+  done
+fi
 
 # ── Phase 2: plugin reconciliation ────────────────────────────────────────
 # reconcile_plugin <plugin_id> <declared_version>

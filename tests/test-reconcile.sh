@@ -190,5 +190,22 @@ install_line=$(grep -nE 'plugin install' "${CALLS_LOG}" | head -1 | cut -d: -f1)
 assert_eq "$([ "${uninstall_line:-99}" -lt "${install_line:-0}" ] && echo before || echo not-before)" "before" "wrong version: uninstall precedes install"
 teardown_test
 
+# ── Case: marketplace registration + update fired before plugin ops ──
+echo "[case] marketplace registration"
+setup_test
+write_settings_with_plugin "0.7.0"
+write_installed ""
+run_reconciler >/dev/null
+mkt_add_calls=$(grep -E 'plugin marketplace add sherodtaylor/claude-code-channel-matrix' "${CALLS_LOG}" | wc -l | tr -d ' ' || true)
+mkt_update_calls=$(grep -E 'plugin marketplace update claude-code-channel-matrix' "${CALLS_LOG}" | wc -l | tr -d ' ' || true)
+assert_eq "${mkt_add_calls}" "1" "marketplace: one add call"
+assert_eq "${mkt_update_calls}" "1" "marketplace: one update call"
+
+# Both marketplace calls MUST precede the plugin install
+mkt_last_line=$(grep -nE 'plugin marketplace' "${CALLS_LOG}" | tail -1 | cut -d: -f1)
+install_line=$(grep -nE 'plugin install' "${CALLS_LOG}" | head -1 | cut -d: -f1)
+assert_eq "$([ "${mkt_last_line:-99}" -lt "${install_line:-0}" ] && echo before || echo not-before)" "before" "marketplace ops precede plugin install"
+teardown_test
+
 echo "[test-reconcile] summary: pass=${PASS} fail=${FAIL}"
 exit $FAIL

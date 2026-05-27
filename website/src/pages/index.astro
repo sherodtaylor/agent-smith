@@ -1,0 +1,27 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import TmuxStatusBar from '../components/TmuxStatusBar.astro';
+import HeroPane from '../components/HeroPane.astro';
+import AuditTail from '../components/AuditTail.astro';
+import AsciiBox from '../components/AsciiBox.astro';
+import StatusBadge from '../components/StatusBadge.astro';
+import CursorBlink from '../components/CursorBlink.astro';
+---
+<BaseLayout title="Home">
+  <TmuxStatusBar slot="status-bar" />
+  <HeroPane
+    tagline="Your engineering team, running in Kubernetes."
+    sub="Persistent, long-lived engineering agents in Kubernetes pods. Real cluster credentials, real PRs, merged to main."
+    ctas={[{ label: '$ read the docs ›', href: `${import.meta.env.BASE_URL}/docs` }, { label: '$ view on github ›', href: 'https://github.com/sherodtaylor/agent-smith' }]}
+  />
+
+  <h2 style="margin-top: var(--space-20)">Smoke test</h2>
+  <p><StatusBadge status="ok" label="components render" /></p>
+  <p>Cursor: <CursorBlink /></p>
+  <AsciiBox ariaLabel="A 3-line box containing the words devbot status">
+{`┌─ devbot ──┐
+│  status   │
+└───────────┘`}
+  </AsciiBox>
+  <AuditTail limit={3} />
+</BaseLayout>

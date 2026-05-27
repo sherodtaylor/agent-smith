@@ -78,13 +78,17 @@ if ! tmux has-session -t main 2>/dev/null; then
   # instead of numeric indices. This survives dotfiles that set base-index 1,
   # which would shift window 0 to window 1 and break index-based targets.
   tmux new-session -d -s main -n claude -x 220 -y 50 -c "${WORKDIR}"
-  tmux pipe-pane -t main:claude.0 -o 'cat >> /proc/1/fd/1'
+  # Route pane output to the container's stdout through strip-ansi so
+  # VictoriaLogs sees clean text instead of colour/cursor escape codes.
+  # The TUI rendering itself (what a human sees on `tmux attach`) is
+  # untouched — only the stdout copy is sanitised.
+  tmux pipe-pane -t main:claude.0 -o '/opt/agent-smith/scripts/strip-ansi.sh >> /proc/1/fd/1'
   tmux send-keys -t main:claude.0 "bash /opt/agent-smith/scripts/claude-loop.sh" Enter
   dispatch main:claude.0
 
   # Pane 1 (bottom): plain shell, for ad-hoc inspection / commands while attached.
   tmux split-window -v -t main:claude -c "${WORKDIR}"
-  tmux pipe-pane -t main:claude.1 -o 'cat >> /proc/1/fd/1'
+  tmux pipe-pane -t main:claude.1 -o '/opt/agent-smith/scripts/strip-ansi.sh >> /proc/1/fd/1'
 fi
 
 echo "[entrypoint] tmux 'main': pane 0 = claude (channels + remote-control), pane 1 = shell"

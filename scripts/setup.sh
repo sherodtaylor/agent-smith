@@ -70,14 +70,14 @@ for repo in ${AGENT_REPOS:-sherodtaylor/homelab}; do
 done
 echo "[setup] marked onboarding complete + pre-trusted workspace repos"
 
-# Install the Matrix channel plugin from its marketplace. settings.json registers
-# the marketplace, but the plugin must be explicitly installed to materialize it.
-# TEMPORARY: pointed at sherodtaylor's fork while testing new tools
-# (per-call threading, edit_message, MATRIX_TYPING). Revert to zekker6
-# after upstream PRs land. Tracking: sherodtaylor/claude-code-channel-matrix#1
-claude plugin marketplace add sherodtaylor/claude-code-channel-matrix 2>&1 || true
-claude plugin install matrix@claude-code-channel-matrix 2>&1 || true
-echo "[setup] matrix channel plugin installed"
+# Reconcile plugins declaratively from agents/_shared/settings.json:
+# extraKnownMarketplaces declares marketplace sources; enabledPlugins
+# declares plugin versions (value-shape: { "version": "X.Y.Z" }, or
+# plain `true` for "install-if-missing, no drift check"). The reconciler
+# refreshes marketplaces, then uninstalls+installs plugins on drift.
+# Best-effort: per-plugin or per-marketplace failures log
+# [reconcile] WARN: ... and do not block boot.
+bash "${APP_DIR}/scripts/reconcile-plugins.sh"
 
 # Matrix channel config from env
 cat > "${CLAUDE_DIR}/channels/matrix/.env" <<EOF

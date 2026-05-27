@@ -19,6 +19,32 @@ cut-a-release procedure.
 
 ## [Unreleased]
 
+### Added
+
+- **Declarative plugin reconciler** —
+  `agents/_shared/settings.json.enabledPlugins` is now the source of
+  truth for plugin versions (value shape: `{ "version": "X.Y.Z" }`,
+  with plain `true` still accepted as "install-if-missing, no version
+  pin"). A new `scripts/reconcile-plugins.sh` runs on every pod boot,
+  refreshes marketplaces, and converges installed plugins via
+  `claude plugin marketplace update` + `uninstall` + `install` on drift.
+  Replaces the prior imperative `claude plugin marketplace add` +
+  `claude plugin install` lines in `setup.sh`, which were
+  idempotent-no-upgrade and pinned pods to whatever version was first
+  installed.
+- **`tests/test-reconcile.sh`** — six smoke cases (13 assertions)
+  against a PATH-shimmed `claude` mock; runs offline.
+
+### Changed
+
+- **`agents/_shared/settings.json`** — `enabledPlugins` values upgraded
+  from `true` to `{ "version": "X.Y.Z" }` for both `matrix@…` (0.7.0)
+  and `superpowers@…` (5.1.0). Lets the reconciler enforce drift checks
+  against the declared pins.
+- **`scripts/setup.sh`** — the marketplace-add + plugin-install block
+  (formerly lines 73-80) is now a single
+  `bash "${APP_DIR}/scripts/reconcile-plugins.sh"` invocation.
+
 ---
 
 ## [0.1.23] - 2026-05-27

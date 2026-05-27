@@ -6,15 +6,15 @@
     "node": ">=22.12.0"
   },
   "scripts": {
-    "dev":   "astro dev",
+    "dev": "astro dev",
     "build": "astro build",
     "preview": "astro preview",
     "check": "astro check",
-    "test":  "bun test",
-    "lhci":  "lhci autorun --config=./lighthouserc.json"
+    "test": "bun test",
+    "lhci": "lhci autorun --config=./lighthouserc.json"
   },
   "dependencies": {
-    "@astrojs/mdx": "^5.0.6",
+    "@astrojs/mdx": "^4",
     "@astrojs/sitemap": "^3.7.3",
     "@astrojs/starlight": "0.37.7",
     "@fontsource/jetbrains-mono": "^5.2.8",

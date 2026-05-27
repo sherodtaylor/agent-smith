@@ -207,5 +207,33 @@ install_line=$(grep -nE 'plugin install' "${CALLS_LOG}" | head -1 | cut -d: -f1)
 assert_eq "$([ "${mkt_last_line:-99}" -lt "${install_line:-0}" ] && echo before || echo not-before)" "before" "marketplace ops precede plugin install"
 teardown_test
 
+# ── Case: install command fails → WARN logged, reconciler exits 0 ──
+echo "[case] install failure"
+setup_test
+write_settings_with_plugin "0.7.0"
+write_installed ""
+
+# Override the shim to fail on `plugin install`
+cat > "${TEST_DIR}/bin/claude" <<EOF
+#!/usr/bin/env bash
+echo "\$*" >> "${CALLS_LOG}"
+case "\$*" in
+  "plugin install "*) exit 1 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "${TEST_DIR}/bin/claude"
+
+output=$(run_reconciler 2>&1 || true)
+rc=$?
+assert_eq "${rc}" "0" "install failure: reconciler exits 0"
+if echo "${output}" | grep -q '\[reconcile\] WARN:.*install failed'; then
+  PASS=$((PASS + 1)); echo "  PASS: install failure: WARN logged"
+else
+  FAIL=$((FAIL + 1)); echo "  FAIL: install failure: WARN not in output"
+  echo "    output: ${output}"
+fi
+teardown_test
+
 echo "[test-reconcile] summary: pass=${PASS} fail=${FAIL}"
 exit $FAIL

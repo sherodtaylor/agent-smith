@@ -22,25 +22,21 @@ if [ -n "${IRON_PROXY_CA_CRT:-}" ]; then
   echo "[setup] installed iron-proxy CA"
 fi
 
-# Write OAuth credentials. If real tokens are available via env vars (injected by
-# ESO from Infisical), merge them into the stub template so Claude can self-refresh
-# when the access token expires. Falls back to pure stubs when env vars are absent
-# (e.g. first boot before refresh-claude-creds.sh has run), in which case
-# iron-proxy's header swap keeps the agent functional but self-refresh won't work.
-if [ -n "${CLAUDE_ACCESS_TOKEN:-}" ] && [ "${CLAUDE_ACCESS_TOKEN}" != "access-token-stub" ]; then
-  jq --arg access "$CLAUDE_ACCESS_TOKEN" \
-     --arg refresh "${CLAUDE_REFRESH_TOKEN:-}" \
-     --arg expires "${CLAUDE_EXPIRES_AT:-}" \
-     '.claudeAiOauth.accessToken = $access
-     | if $refresh != "" then .claudeAiOauth.refreshToken = $refresh else . end
-     | if ($expires != "" and $expires != "null") then .claudeAiOauth.expiresAt = ($expires | tonumber) else . end' \
-     "${APP_DIR}/agents/_shared/.credentials.json" > "${CLAUDE_DIR}/.credentials.json"
-  chmod 600 "${CLAUDE_DIR}/.credentials.json"
-  echo "[setup] wrote real credentials from env (self-refresh enabled)"
+# Write OAuth credentials only if the PVC doesn't already have real (non-stub)
+# tokens. Real credentials persist across pod restarts via the home PVC and are
+# managed by claude-reauth.py + Claude Code's own refresh cycle. Overwriting them
+# here would blow away a valid session on every pod restart.
+_existing_token=""
+if [ -f "${CLAUDE_DIR}/.credentials.json" ]; then
+  _existing_token=$(jq -r '.claudeAiOauth.accessToken // ""' "${CLAUDE_DIR}/.credentials.json" 2>/dev/null || true)
+fi
+
+if [ -n "$_existing_token" ] && [ "$_existing_token" != "access-token-stub" ]; then
+  echo "[setup] real credentials already on PVC — preserving (skipping env-var write)"
 else
   cp "${APP_DIR}/agents/_shared/.credentials.json" "${CLAUDE_DIR}/.credentials.json"
   chmod 600 "${CLAUDE_DIR}/.credentials.json"
-  echo "[setup] wrote stub credentials (iron-proxy injects real tokens at runtime)"
+  echo "[setup] wrote stub credentials (claude-reauth will handle real login)"
 fi
 
 mkdir -p "${CLAUDE_DIR}/agents" "${CLAUDE_DIR}/channels/matrix"

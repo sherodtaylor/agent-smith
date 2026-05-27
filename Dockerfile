@@ -18,7 +18,20 @@ ENV BUN_INSTALL=/usr/local
 RUN apt-get update && apt-get install -y --no-install-recommends \
       git curl wget ca-certificates gnupg unzip \
       vim tmux jq \
+      python3 python3-pip \
     && rm -rf /var/lib/apt/lists/*
+
+# ttyd — web-based terminal for the reauth tunnel fallback
+RUN TTYD_VERSION=$(curl -sL https://api.github.com/repos/tsl0922/ttyd/releases/latest \
+      | python3 -c "import sys,json; print(json.load(sys.stdin)['tag_name'])") \
+    && curl -Lo /usr/local/bin/ttyd \
+         "https://github.com/tsl0922/ttyd/releases/download/${TTYD_VERSION}/ttyd.x86_64" \
+    && chmod +x /usr/local/bin/ttyd
+
+# Playwright + Chromium for headless SSO automation
+RUN pip3 install --no-cache-dir playwright --break-system-packages \
+    && playwright install chromium \
+    && playwright install-deps chromium
 
 # GitHub CLI
 RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
@@ -53,6 +66,7 @@ COPY --from=mcp-nats-builder /out/mcp-nats /usr/local/bin/mcp-nats
 WORKDIR /opt/agent-smith
 COPY agents/   ./agents/
 COPY scripts/  ./scripts/
-RUN chmod +x scripts/setup.sh scripts/entrypoint.sh scripts/claude-loop.sh
+RUN chmod +x scripts/setup.sh scripts/entrypoint.sh scripts/claude-loop.sh \
+    && chmod +x scripts/claude-reauth.py
 
 CMD ["/opt/agent-smith/scripts/entrypoint.sh"]

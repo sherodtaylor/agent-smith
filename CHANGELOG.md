@@ -21,6 +21,36 @@ cut-a-release procedure.
 
 ### Added
 
+- **`scripts/claude-reauth.py`** — Playwright-based Claude auth self-healing.
+  Runs at startup and after short-lived crashes. Tries headless SSO using a
+  persistent Chrome profile (`~/.chrome-profile` on the home PVC). If SSO
+  cookies are expired, falls back to a `ttyd` browser terminal exposed at
+  `<agentName>-shell.<hostSuffix>` (via Traefik Ingress) and sends a Matrix DM
+  with the tunnel URL. After the user completes SSO, the bot resumes
+  automatically. No Infisical or ESO involvement — credentials live only on the
+  NFS-backed home PVC.
+- **`charts/agent-smith/templates/service-reauth.yaml`** — ClusterIP Service
+  for the ttyd tunnel port (7681), conditional on `reauth.tunnel.enabled`.
+- **`charts/agent-smith/templates/ingress-reauth.yaml`** — Traefik Ingress at
+  `<agentName>-shell<hostSuffix>` with wildcard TLS, conditional on
+  `reauth.tunnel.enabled`.
+- **`charts/agent-smith/values.yaml`** — new `reauth.tunnel` section
+  (`enabled`, `hostSuffix`, `tlsSecretName`); `REAUTH_TUNNEL_HOST` wired into
+  the agent container env.
+
+### Changed
+
+- **`scripts/setup.sh`** — credentials write is now skipped when the home PVC
+  already holds real (non-stub) tokens, preserving credentials across pod
+  restarts. Previously the init container always overwrote from env vars.
+- **`scripts/claude-loop.sh`** — runs `_ensure_auth` (calls `claude-reauth.py`
+  if `claude auth status` reports not logged in) before starting Claude and
+  after any exit with uptime < 60s.
+- **`Dockerfile`** — adds `python3`, `pip3`, `playwright` + Chromium, and
+  `ttyd` to the runtime image.
+
+### Added
+
 - **Apache License 2.0** — repo now ships under Apache-2.0 with `LICENSE`
   (full Apache-2.0 text) and `NOTICE` (attribution) at the root, plus a
   `license: Apache-2.0` field in `charts/agent-smith/Chart.yaml` (visible

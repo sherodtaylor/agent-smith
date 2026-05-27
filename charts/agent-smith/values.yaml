@@ -116,6 +116,19 @@ affinity: {}
 setup:
   command: ""
 
+# Claude auth self-healing via Playwright + ttyd browser tunnel.
+# When enabled, the chart deploys a Service and Ingress so that when Claude's
+# SSO cookies expire and headless auth fails, the agent exposes a browser
+# terminal at <agentName>-shell.<hostSuffix> and DMs the Matrix owner.
+reauth:
+  tunnel:
+    enabled: true
+    # Suffix appended to agentName to form the tunnel hostname.
+    # e.g. devbot-shell.lab.sherodtaylor.dev
+    hostSuffix: ".lab.sherodtaylor.dev"
+    # TLS secret must exist in the same namespace (wildcard cert).
+    tlsSecretName: "lab-wildcard-tls"
+
 # Extra env vars (merged with the chart-managed ones) — useful for per-agent
 # tweaks without forking the chart
 extraEnv: []

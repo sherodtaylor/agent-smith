@@ -3,7 +3,6 @@
 ## Reference scripts
 
 ```bash
-.claude/references/restore-stub-creds.sh --help
 .claude/references/restart-agent.sh --help
 .claude/references/restart-ironproxy.sh
 ```
@@ -11,132 +10,99 @@
 Use when an agent's tmux pane shows `401 Unauthorized` from `*.anthropic.com`,
 or `kubectl logs` reports auth errors after a successful pod startup.
 
-## The shape of this bug
+## Architecture (current)
 
-The pod never holds a real OAuth token — `~/.claude/.credentials.json`
-contains literal stub strings (`access-token-stub`, `refresh-token-stub`).
-iron-proxy sees those strings in the `Authorization` header and rewrites them
-to the real token at egress. A 401 means iron-proxy's swap **didn't fire**.
+Each agent holds its own real Claude OAuth session in
+`/root/.claude/.credentials.json` on its NFS-backed home PVC. Credentials are
+written once by `claude auth login --claudeai` (via `claude-reauth.py`) and
+refreshed automatically by the Claude Code CLI on each token expiry. iron-proxy
+is configured with `require: false` for Anthropic — real tokens pass through
+unchanged.
 
-Two common causes:
+A 401 means the stored credentials are invalid, expired beyond refresh, or the
+CLI's refresh cycle failed.
 
-1. **`.credentials.json` no longer contains the stub.** Claude Code's OAuth
-   refresh path overwrites the file mid-flight with the upstream response,
-   which strips `subscriptionType` and may change the access token. With the
-   stub string gone, iron-proxy has nothing to match against — the request
-   goes upstream with whatever Claude wrote, which fails because it's stale
-   or never had `subscriptionType: "max"`.
-2. **iron-proxy is holding a stale upstream token.** The real
-   `CLAUDE_CODE_OAUTH_TOKEN` in iron-proxy's environment has expired or been
-   rotated, but iron-proxy hasn't re-read it. ESO syncs the k8s Secret on its
-   refresh interval, but iron-proxy must restart to pick up the new env value.
+## Automatic recovery
 
-## Preconditions
+`claude-loop.sh` calls `claude-reauth.py` at startup and after any short-lived
+crash (<60s). `claude-reauth.py` will:
 
-- `kubectl` access to the `agents` and `agent-infra` namespaces.
-- Awareness of which token rotated, if any (check Infisical history).
+1. Try headless Playwright with the persistent Chrome profile
+   (`~/.chrome-profile`).
+2. If SSO cookies are still valid — re-auth completes with no human input.
+3. If SSO cookies expired — expose a ttyd browser terminal and send a Matrix DM.
 
-## Steps
+Most 401s self-heal within one restart cycle. Check Matrix for a DM from the
+bot before taking manual action.
 
-### 1. Confirm it's actually a 401 (and not a different error)
+## Manual recovery (SSO cookies expired or Playwright fails)
 
-```bash
-kubectl logs -n agents <agent>-0 --tail=200 | grep -E '401|Unauthorized|Invalid API key'
-```
-
-You want a clear 401 from `api.anthropic.com` or similar. If it's a 403, a
-network error, or "no API key", that's a different problem — go to
-[`agent-down.md`](agent-down.md).
-
-### 2. Check whether the stub is still in place
+### 1. Confirm the agent is unauthenticated
 
 ```bash
-kubectl exec -n agents <agent>-0 -- \
-  jq -r '.claudeAiOauth.accessToken' /root/.claude/.credentials.json
+kubectl exec -n agents <agent>-0 -c agent -- claude auth status
 ```
 
-Expected output: `access-token-stub`
+Expected when broken: `"loggedIn": false` or a non-zero exit.
 
-If you see anything else (a real JWT, an empty string, `null`), cause #1
-applies. `claude-loop.sh` restores the stub before each `claude` start, so
-this should only stick if Claude is currently running mid-refresh.
+### 2. Trigger reauth manually
 
-### 3. Force-restore and restart the agent
+```bash
+kubectl exec -n agents <agent>-0 -c agent -- python3 /opt/agent-smith/scripts/claude-reauth.py
+```
+
+Watch logs. If headless SSO succeeds you'll see `[reauth] headless SSO
+succeeded`. If not, open the tunnel URL from the Matrix DM in your browser and
+complete the Google SSO.
+
+### 3. Verify credentials were written
+
+```bash
+kubectl exec -n agents <agent>-0 -c agent -- \
+  jq -r '.claudeAiOauth | {loggedIn: (.accessToken != "access-token-stub"), expiresAt}' \
+  /root/.claude/.credentials.json
+```
+
+`loggedIn` should be `true`; `expiresAt` should be in the future.
+
+### 4. Bounce the agent
 
 ```bash
 .claude/references/restart-agent.sh --agent <agent>
 ```
 
-The StatefulSet recreates the pod. `setup.sh` runs (re-copies the stub) and
-`claude-loop.sh` starts fresh.
+`claude-loop.sh` will call `_ensure_auth` on startup — if credentials are now
+valid, Claude starts normally.
 
-You should see `[claude-loop] credentials restored from template` followed by
-a successful Claude Code startup banner.
-
-### 4. If 401 persists, check iron-proxy
-
-The pod-side stub is fine, so the swap is happening but the *upstream* token
-iron-proxy holds is bad.
+### 5. Verify end-to-end
 
 ```bash
-# Last time iron-proxy restarted vs last time ESO synced the secret
-kubectl get pod -n agent-infra -l app=iron-proxy -o wide
-kubectl describe externalsecret -n agent-infra iron-proxy-upstream-secrets
+# No new 401s in the last 100 log lines
+kubectl logs -n agents <agent>-0 --tail=100 | grep -c "401 Unauthorized"
 ```
 
-If the ExternalSecret's `LastSync` is newer than the iron-proxy pod's start
-time, the pod is running with a stale env value:
-
-```bash
-.claude/references/restart-ironproxy.sh
-```
-
-### 5. Verify
-
-After both pods are Ready, send a Matrix message to the agent:
+Then send a Matrix message to the agent:
 
 ```
 @<agent> ping
 ```
 
-You're looking for:
+You're looking for the 👀 reaction and a reply within 60s.
 
-- The 👀 reaction (Matrix channel alive).
-- A reply (Anthropic egress working).
-- No new 401s in `kubectl logs -n agents <agent>-0 --tail=50`.
+## If 401 persists after reauth
 
-```bash
-# Sanity: count 401s vs 200s over the last few minutes
-kubectl logs -n agents <agent>-0 --tail=500 | grep -c "401 Unauthorized"
-kubectl logs -n agents <agent>-0 --tail=500 | grep -c " 200 "
-```
-
-The first number should be `0`. The second should be non-zero.
-
-## Rollback
-
-There's nothing to roll back here — the operation is idempotent. If a restart
-makes it worse, check `claude-loop.sh` and the stub credentials file in the
-repo for accidental modifications:
+Check iron-proxy — a stale upstream token there affects GitHub egress, not
+Claude auth (those pass through), but can cause confusing mixed auth failures:
 
 ```bash
-git -C /workspace/agent-smith diff agents/_shared/.credentials.json
+.claude/references/restart-ironproxy.sh
 ```
 
-The stub file is committed to the repo for a reason. If a PR accidentally
-swapped in a real credential, revert and re-publish.
+## Why tokens persist across restarts
 
-## Why this works
-
-iron-proxy matches on the literal string `access-token-stub` in the
-`Authorization` header. Two ways that match can fail:
-
-1. The pod sent a different string (Claude Code refreshed the credentials
-   file). `claude-loop.sh` restoring the stub before every start fixes this.
-2. iron-proxy's own copy of the real upstream token expired. ESO refreshed
-   the k8s Secret but iron-proxy reads env at process start. A rollout
-   restart re-reads it.
-
-Both fixes are restarts, just of different pods. The order matters: restart
-the agent first (it's cheaper), restart iron-proxy only if the agent stub is
-intact and 401s persist.
+Credentials are written to `/root/.claude/.credentials.json` on the agent's
+home PVC (NFS, survives pod restarts). `setup.sh` in the init container skips
+overwriting credentials when the PVC already has real (non-stub) tokens.
+`claude-loop.sh` carries real tokens forward on each inner restart. The only
+time credentials are lost is a PVC wipe, a manual `claude auth logout`, or a
+remote token revocation.

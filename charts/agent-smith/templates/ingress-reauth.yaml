@@ -1,0 +1,25 @@
+{{- if .Values.reauth.tunnel.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "agent-smith.fullname" . }}-shell
+  labels:
+    {{- include "agent-smith.labels" . | nindent 4 }}
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: {{ .Values.agentName }}-shell{{ .Values.reauth.tunnel.hostSuffix }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "agent-smith.fullname" . }}-shell
+                port:
+                  number: 7681
+  tls:
+    - hosts:
+        - {{ .Values.agentName }}-shell{{ .Values.reauth.tunnel.hostSuffix }}
+      secretName: {{ .Values.reauth.tunnel.tlsSecretName }}
+{{- end }}

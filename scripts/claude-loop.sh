@@ -15,6 +15,23 @@ fi
 
 echo "[claude-loop] starting (agent=${AGENT_NAME})"
 
+# Ensure Claude is authenticated before entering the main loop.
+# claude-reauth.py tries headless Playwright first (SSO cookies), then falls
+# back to a ttyd browser tunnel + Matrix DM if cookies have expired.
+_ensure_auth() {
+  local status logged_in
+  status=$(claude auth status 2>/dev/null || true)
+  logged_in=$(printf '%s' "$status" | jq -r '.loggedIn // false' 2>/dev/null || echo "false")
+  if [ "$logged_in" = "true" ]; then
+    echo "[claude-loop] auth ok"
+    return 0
+  fi
+  echo "[claude-loop] not authenticated — running claude-reauth"
+  python3 /opt/agent-smith/scripts/claude-reauth.py
+}
+
+_ensure_auth
+
 while true; do
   # Preserve real tokens written by Claude Code after an OAuth refresh cycle.
   # iron-proxy is configured with require:false — real tokens pass through
@@ -57,6 +74,11 @@ while true; do
   UPTIME=$(( $(date +%s) - START ))
 
   echo "[claude-loop] claude exited (code=${EXIT_CODE} uptime=${UPTIME}s)"
+
+  # Short-lived exits (<60s) may be auth failures — re-check before restarting
+  if [ "$UPTIME" -lt 60 ]; then
+    _ensure_auth
+  fi
 
   if [ "$UPTIME" -gt 300 ]; then
     BACKOFF=15

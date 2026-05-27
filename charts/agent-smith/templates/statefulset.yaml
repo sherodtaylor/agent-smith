@@ -85,6 +85,10 @@ spec:
             - name: NATS_URL
               value: {{ .Values.nats.url | quote }}
             {{- end }}
+            {{- if .Values.reauth.tunnel.enabled }}
+            - name: REAUTH_TUNNEL_HOST
+              value: {{ printf "%s-shell%s" .Values.agentName .Values.reauth.tunnel.hostSuffix | quote }}
+            {{- end }}
             {{- with .Values.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}

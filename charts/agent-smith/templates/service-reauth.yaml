@@ -1,0 +1,17 @@
+{{- if .Values.reauth.tunnel.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "agent-smith.fullname" . }}-shell
+  labels:
+    {{- include "agent-smith.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "agent-smith.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: ttyd
+      port: 7681
+      targetPort: 7681
+      protocol: TCP
+{{- end }}

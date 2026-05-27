@@ -1,0 +1,40 @@
+@import '@fontsource/jetbrains-mono/400.css';
+@import '@fontsource/jetbrains-mono/700.css';
+@import '@fontsource/jetbrains-mono/800.css';
+
+:root {
+  /* Palette — spec §2.1 */
+  --bg:          #0b0d10;
+  --bg-elev:     #13171b;
+  --fg:          #d4d7dc;
+  --fg-muted:    #7a818c;
+  --accent:      #5fbf8d;
+  --accent-warn: #d4a85f;
+  --accent-err:  #cf6679;
+
+  /* Type — spec §2.2 */
+  --font-display: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-body:    'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-mono:    'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --fs-display: clamp(2rem, 5vw, 4.5rem);
+  --fs-body:    15px;
+  --fs-mono:    13px;
+  --lh-display: 1.05;
+  --lh-body:    1.65;
+  --lh-mono:    1.5;
+
+  /* Spacing — spec §2.3 (8px scale) */
+  --space-1:   4px;
+  --space-2:   8px;
+  --space-3:  12px;
+  --space-4:  16px;
+  --space-6:  24px;
+  --space-8:  32px;
+  --space-12: 48px;
+  --space-20: 80px;
+  --space-32: 128px;
+
+  /* Layout */
+  --measure: 66ch;
+}

@@ -1,0 +1,18 @@
+---
+type Status = 'ok' | 'warn' | 'fail' | 'running';
+interface Props { status: Status; label: string; }
+const { status, label } = Astro.props;
+const glyph: Record<Status, string> = { ok: '✓', warn: '!', fail: '✗', running: '●' };
+---
+<span class:list={['status-badge', status]} role="status" aria-label={`${status}: ${label}`}>
+  <span class="glyph">{glyph[status]}</span> {label}
+</span>
+
+<style>
+  .status-badge { font-family: var(--font-mono); font-size: var(--fs-mono); }
+  .glyph        { margin-right: var(--space-1); }
+  .ok      .glyph { color: var(--accent); }
+  .running .glyph { color: var(--accent); }
+  .warn    .glyph { color: var(--accent-warn); }
+  .fail    .glyph { color: var(--accent-err); }
+</style>

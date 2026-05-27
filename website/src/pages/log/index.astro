@@ -1,0 +1,43 @@
+---
+import { getCollection } from 'astro:content';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import TmuxStatusBar from '../../components/TmuxStatusBar.astro';
+
+const entries = (await getCollection('log'))
+  .sort((a, b) => +b.data.timestamp - +a.data.timestamp);
+---
+<BaseLayout title="Log">
+  <TmuxStatusBar slot="status-bar" sessionName="0:log" />
+  <h1>$ tail -f #audit</h1>
+  <p class="measure" style="color: var(--fg-muted);">
+    Reverse-chronological record of notable agent actions. One line per
+    event; expand for context.
+  </p>
+  <ul class="log-feed">
+    {entries.map(e => (
+      <li>
+        <details>
+          <summary>
+            <time datetime={e.data.timestamp.toISOString()}>{e.data.timestamp.toISOString().replace(/\.\d{3}/, '')}</time>{' '}
+            <span class="agent">{e.data.agent}</span>{' '}
+            <span class="run">run={e.data.run_id.slice(0, 6)}</span>{' '}
+            <span class="summary">{e.data.summary}</span>
+            {e.data.link && <a href={e.data.link} class="link">[link]</a>}
+          </summary>
+          {/* Body rendered when an entry has MDX content */}
+        </details>
+      </li>
+    ))}
+  </ul>
+</BaseLayout>
+
+<style>
+  .log-feed   { list-style: none; padding: 0; margin: 0; display: grid; gap: var(--space-2); font-family: var(--font-mono); font-size: var(--fs-mono); }
+  .log-feed time    { color: var(--fg-muted); }
+  .log-feed .agent  { color: var(--fg); }
+  .log-feed .run    { color: var(--accent); }
+  .log-feed .summary{ color: var(--fg-muted); }
+  .log-feed .link   { margin-left: var(--space-2); color: var(--accent); }
+  details summary   { cursor: pointer; padding: var(--space-2); }
+  details[open] summary { background: var(--bg-elev); border-radius: 4px; }
+</style>

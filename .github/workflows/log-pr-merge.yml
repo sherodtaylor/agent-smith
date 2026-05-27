@@ -1,0 +1,69 @@
+name: log-pr-merge
+
+on:
+  pull_request:
+    types: [closed]
+  repository_dispatch:
+    types: [pr-merged]
+
+permissions:
+  contents: write
+
+jobs:
+  log:
+    if: github.event.pull_request.merged == true || github.event_name == 'repository_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Compose entry
+        id: compose
+        env:
+          GH_EVENT: ${{ toJson(github.event) }}
+        run: |
+          set -euo pipefail
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            NUMBER=${{ github.event.pull_request.number }}
+            TITLE='${{ github.event.pull_request.title }}'
+            AUTHOR='${{ github.event.pull_request.user.login }}'
+            LINK='${{ github.event.pull_request.html_url }}'
+            REPO='agent-smith'
+            TS=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          else
+            NUMBER='${{ github.event.client_payload.number }}'
+            TITLE='${{ github.event.client_payload.title }}'
+            AUTHOR='${{ github.event.client_payload.author }}'
+            LINK='${{ github.event.client_payload.link }}'
+            REPO='${{ github.event.client_payload.repo }}'
+            TS='${{ github.event.client_payload.merged_at }}'
+          fi
+
+          AGENT=$AUTHOR
+          case "$AUTHOR" in devbot|infrabot) AGENT=$AUTHOR ;; *) AGENT='sherod' ;; esac
+
+          SLUG=$(echo "$TITLE" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/-\+/-/g' | sed 's/^-\|-$//g' | cut -c1-50)
+          DATE=$(echo "$TS" | cut -c1-10)
+          FILE="website/src/content/log/${DATE}-pr-${NUMBER}-${SLUG}.mdx"
+          RUN=$(echo "${{ github.run_id }}" | sha1sum | cut -c1-6)
+
+          mkdir -p website/src/content/log
+          cat > "$FILE" <<EOF
+          ---
+          timestamp: ${TS}
+          agent: ${AGENT}
+          run_id: ${RUN}
+          kind: pr_merged
+          summary: "merged PR #${NUMBER} (${TITLE})"
+          link: ${LINK}
+          ---
+          EOF
+          echo "file=$FILE" >> $GITHUB_OUTPUT
+      - name: Commit + push
+        run: |
+          git config user.name  'agent-smith[bot]'
+          git config user.email 'agent-smith-bot@users.noreply.github.com'
+          git add "${{ steps.compose.outputs.file }}"
+          git commit -m "chore(log): ${{ steps.compose.outputs.file }}"
+          git push

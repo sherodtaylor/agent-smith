@@ -2,13 +2,61 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Replace `setup.sh`'s imperative `claude plugin install` lines with a declarative `agents/_shared/plugin-manifest.json` + a `scripts/reconcile-plugins.sh` that converges `installed_plugins.json` to match the manifest via `marketplace update` → `uninstall` → `install` on drift.
+**Goal:** Replace `setup.sh`'s imperative `claude plugin install` lines with a declarative `agents/_shared/settings.json (enabledPlugins shape)` + a `scripts/reconcile-plugins.sh` that converges `installed_plugins.json` to match the manifest via `marketplace update` → `uninstall` → `install` on drift.
 
 **Architecture:** Two new files (manifest + reconciler) + one modified file (`setup.sh`) + one new test file. The reconciler is bash + `jq` + `claude plugin` CLI; no new dependencies. Tests use a PATH-shimmed `claude` mock that records calls; smoke runs offline. Each test case verifies the reconciler emits the correct `claude plugin` invocation sequence for a given starting state.
 
 **Tech Stack:** Bash 5+, `jq` (already in image), `claude plugin` CLI, no test framework (shell scripts following the existing `tests/test-loops.sh` pattern).
 
 **Spec:** `docs/superpowers/specs/2026-05-27-declarative-plugin-reconciler-design.md`
+
+---
+
+## ⚠️ AMENDMENT (read before implementing any task)
+
+The first draft of this plan introduced a separate file
+`agents/_shared/plugin-manifest.json` as the version-pin source. **That
+file is no longer part of the design.** Sherod's correct call: single
+source of truth in `agents/_shared/settings.json`. The version pin lives
+inside the existing `enabledPlugins` map by changing the value shape:
+
+```jsonc
+"enabledPlugins": {
+  "matrix@claude-code-channel-matrix":  { "version": "0.7.0" },  // was: true
+  "superpowers@claude-plugins-official": { "version": "5.1.0" }   // was: true
+}
+```
+
+**Apply these substitutions wherever the per-task text below still says
+"plugin-manifest.json" or describes a separate manifest file:**
+
+1. **Source of plugin IDs:** read keys of `settings.json.enabledPlugins`
+   instead of `plugin-manifest.json.plugins`. Example: `jq -r
+   '.enabledPlugins | keys[]' "${SETTINGS}"` (no separate `MANIFEST`
+   env var; the reconciler only reads `SETTINGS` and `INSTALLED`).
+2. **Source of declared version:** read
+   `.enabledPlugins."<plugin_id>" | if type == "object" then .version
+   else "" end` from `${SETTINGS}`. Plain-`true` values mean "enabled,
+   no version pin" — the reconciler still ensures the plugin is
+   installed but skips drift checks on unpinned entries.
+3. **Test harness (`tests/test-reconcile.sh`):** drop the `write_manifest`
+   helper. Add `write_settings_with_plugin <version>` that writes a
+   settings.json containing both `extraKnownMarketplaces` AND a single
+   pinned `enabledPlugins` entry. Per-case tests call only this helper.
+4. **Task 9 ("Author the initial manifest"):** instead of creating
+   `agents/_shared/plugin-manifest.json`, **edit
+   `agents/_shared/settings.json`** to change the existing
+   `"matrix@claude-code-channel-matrix": true` to
+   `"matrix@claude-code-channel-matrix": { "version": "0.7.0" }` and
+   the same for `superpowers` at `"5.1.0"`. No new file.
+5. **File map:** drop the row for `plugin-manifest.json`. Add a row for
+   `agents/_shared/settings.json` marked **Modified** (value-shape
+   change in `enabledPlugins`; `extraKnownMarketplaces` unchanged).
+
+Every other piece of the plan — the reconciler's marketplace phase,
+the uninstall+install drift handling, the test cases, the setup.sh
+integration, the CHANGELOG entry, the PR + cluster validation — stays
+exactly as written. The schema simplification is the only delta.
 
 ---
 
@@ -26,7 +74,7 @@ The spec lives on the existing `feat/declarative-plugin-reconciler-spec` branch 
 
 | File | Action | Responsibility |
 |------|--------|----------------|
-| `agents/_shared/plugin-manifest.json` | **Create** | Declarative source of truth: which plugins, which versions |
+| `agents/_shared/settings.json (enabledPlugins shape)` | **Create** | Declarative source of truth: which plugins, which versions |
 | `scripts/reconcile-plugins.sh` | **Create** | Read manifest + settings.json + installed_plugins.json; converge via `claude plugin` CLI |
 | `tests/test-reconcile.sh` | **Create** | Six test cases against a PATH-shimmed `claude` mock |
 | `scripts/setup.sh` | **Modify** | Replace lines 73-77 (imperative install) with reconciler invocation |
@@ -116,7 +164,7 @@ assert_eq() {
 
 # Build a temp directory containing:
 #   - A `claude` shim on PATH that records args to ./calls.log
-#   - A fake APP_DIR with agents/_shared/{settings.json, plugin-manifest.json}
+#   - A fake APP_DIR with agents/_shared/{settings.json, settings.json (enabledPlugins)}
 #   - A fake CLAUDE_DIR with plugins/installed_plugins.json
 #
 # Returns (via globals): TEST_DIR, APP_DIR, CLAUDE_DIR, CALLS_LOG, original PATH
@@ -167,10 +215,10 @@ write_settings() {
 EOF
 }
 
-# Write a plugin-manifest.json with a single plugin pinned to the given version
+# Write a settings.json (enabledPlugins) with a single plugin pinned to the given version
 write_manifest() {
   local version="$1"
-  cat > "${APP_DIR}/agents/_shared/plugin-manifest.json" <<EOF
+  cat > "${APP_DIR}/agents/_shared/settings.json (enabledPlugins shape)" <<EOF
 {
   "plugins": {
     "matrix@claude-code-channel-matrix": { "version": "${version}" }
@@ -272,7 +320,7 @@ echo "[test-reconcile] harness loaded"
 echo "[case] empty manifest"
 setup_test
 write_settings
-cat > "${APP_DIR}/agents/_shared/plugin-manifest.json" <<'EOF'
+cat > "${APP_DIR}/agents/_shared/settings.json (enabledPlugins shape)" <<'EOF'
 { "plugins": {} }
 EOF
 write_installed ""
@@ -300,7 +348,7 @@ Create `/workspace/agent-swarm/scripts/reconcile-plugins.sh`:
 ```bash
 #!/usr/bin/env bash
 # Reconcile installed plugins against the declarative manifest in
-# agents/_shared/plugin-manifest.json. Reads marketplace info from
+# agents/_shared/settings.json (enabledPlugins shape). Reads marketplace info from
 # agents/_shared/settings.json. Best-effort: per-plugin / per-marketplace
 # failures log [reconcile] WARN: ... and do not abort the loop. Exits 0
 # regardless. Designed to run from setup.sh in the init container.
@@ -312,7 +360,7 @@ APP_DIR="${APP_DIR:-/opt/agent-smith}"
 CLAUDE_DIR="${CLAUDE_DIR:-${HOME}/.claude}"
 
 SETTINGS="${APP_DIR}/agents/_shared/settings.json"
-MANIFEST="${APP_DIR}/agents/_shared/plugin-manifest.json"
+MANIFEST="${APP_DIR}/agents/_shared/settings.json (enabledPlugins shape)"
 INSTALLED="${CLAUDE_DIR}/plugins/installed_plugins.json"
 
 log()  { echo "[reconcile] $*"; }
@@ -324,7 +372,7 @@ if [ ! -f "${SETTINGS}" ]; then
   warn "settings.json not found at ${SETTINGS} — skipping marketplaces"
 fi
 if [ ! -f "${MANIFEST}" ]; then
-  warn "plugin-manifest.json not found at ${MANIFEST} — skipping plugins"
+  warn "settings.json (enabledPlugins) not found at ${MANIFEST} — skipping plugins"
   log "complete"
   exit 0
 fi
@@ -746,10 +794,10 @@ plugin must not block pod boot."
 
 ## Phase 5 — Manifest file + setup.sh integration
 
-### Task 9: Author the initial `plugin-manifest.json`
+### Task 9: Author the initial `settings.json (enabledPlugins)`
 
 **Files:**
-- Create: `agents/_shared/plugin-manifest.json`
+- Create: `agents/_shared/settings.json (enabledPlugins shape)`
 
 - [ ] **Step 1: Determine which plugins to declare**
 
@@ -762,7 +810,7 @@ Expected: lists `matrix@claude-code-channel-matrix` and `superpowers@claude-plug
 
 - [ ] **Step 2: Author the manifest**
 
-Create `/workspace/agent-swarm/agents/_shared/plugin-manifest.json`:
+Create `/workspace/agent-swarm/agents/_shared/settings.json (enabledPlugins shape)`:
 
 ```json
 {
@@ -778,7 +826,7 @@ Create `/workspace/agent-swarm/agents/_shared/plugin-manifest.json`:
 - [ ] **Step 3: Validate the JSON parses**
 
 ```bash
-jq '.' /workspace/agent-swarm/agents/_shared/plugin-manifest.json | head -10
+jq '.' /workspace/agent-swarm/agents/_shared/settings.json (enabledPlugins shape) | head -10
 ```
 
 Expected: pretty-printed JSON with no parse errors.
@@ -786,8 +834,8 @@ Expected: pretty-printed JSON with no parse errors.
 - [ ] **Step 4: Commit**
 
 ```bash
-git add agents/_shared/plugin-manifest.json
-git commit -m "feat(manifest): add agents/_shared/plugin-manifest.json
+git add agents/_shared/settings.json (enabledPlugins shape)
+git commit -m "feat(manifest): add agents/_shared/settings.json (enabledPlugins shape)
 
 Initial manifest pins matrix-channel at 0.7.0 (forces the upgrade from
 the stuck-at-0.6.0 install) and superpowers at 5.1.0 (currently active).
@@ -826,7 +874,7 @@ echo "[setup] matrix channel plugin installed"
 Edit `scripts/setup.sh` — replace the block above (the lines from the section comment through `echo "[setup] matrix channel plugin installed"`) with:
 
 ```bash
-# Reconcile plugins declaratively from agents/_shared/plugin-manifest.json.
+# Reconcile plugins declaratively from agents/_shared/settings.json (enabledPlugins shape).
 # Marketplaces are registered + refreshed; installed plugins are upgraded
 # to match the manifest's declared versions. Best-effort; failures log
 # [reconcile] WARN: ... and do not block boot.
@@ -857,7 +905,7 @@ git commit -m "feat(setup): invoke reconciler instead of imperative install
 
 Replaces the two \`claude plugin\` lines (marketplace add + install) with
 a single \`bash \${APP_DIR}/scripts/reconcile-plugins.sh\` invocation. The
-reconciler reads agents/_shared/plugin-manifest.json + settings.json and
+reconciler reads agents/_shared/settings.json (enabledPlugins shape) + settings.json and
 converges plugin install state to match. Marketplaces continue to be
 declared in settings.json.extraKnownMarketplaces; nothing about the
 fork-flip changes in this commit."
@@ -881,7 +929,7 @@ Find the `## [Unreleased]` line in `CHANGELOG.md`. Add this block immediately un
 
 ### Added
 
-- **Declarative plugin reconciler** — `agents/_shared/plugin-manifest.json`
+- **Declarative plugin reconciler** — `agents/_shared/settings.json (enabledPlugins shape)`
   is now the source of truth for plugin versions. A new
   `scripts/reconcile-plugins.sh` runs on every pod boot, refreshes
   marketplaces, and converges installed plugins to match the manifest
@@ -909,7 +957,7 @@ Find the `## [Unreleased]` line in `CHANGELOG.md`. Add this block immediately un
 git add CHANGELOG.md
 git commit -m "docs(changelog): describe declarative plugin reconciler
 
-Entry under [Unreleased] for the new agents/_shared/plugin-manifest.json,
+Entry under [Unreleased] for the new agents/_shared/settings.json (enabledPlugins shape),
 scripts/reconcile-plugins.sh, and tests/test-reconcile.sh. Calls out the
 setup.sh change (imperative install lines → single reconciler call) and
 the underlying motivation (claude plugin install is
@@ -1015,7 +1063,7 @@ SSL_CERT_FILE=/root/iron-proxy.crt gh pr create \
 ## Summary
 
 Replaces the imperative `claude plugin install` block in `setup.sh` with a declarative
-reconciler driven by `agents/_shared/plugin-manifest.json`. Solves the lingering bug
+reconciler driven by `agents/_shared/settings.json (enabledPlugins shape)`. Solves the lingering bug
 where pods stayed on `matrix@claude-code-channel-matrix v0.6.0` even after `v0.7.0` was
 published, because `claude plugin install` is idempotent-no-upgrade and `setup.sh` never
 ran `claude plugin marketplace update`.
@@ -1026,7 +1074,7 @@ ran `claude plugin marketplace update`.
 
 ## Changes
 
-- **New** `agents/_shared/plugin-manifest.json` — declarative source of truth
+- **New** `agents/_shared/settings.json (enabledPlugins shape)` — declarative source of truth
 - **New** `scripts/reconcile-plugins.sh` — bash, ~80 lines, depends only on `jq` + `claude plugin` CLI
 - **New** `tests/test-reconcile.sh` — six smoke cases, PATH-shimmed `claude` mock, runs offline
 - **Modified** `scripts/setup.sh` — replaces 7 imperative lines with a single reconciler call
@@ -1038,7 +1086,7 @@ ran `claude plugin marketplace update`.
 - [x] `bash -n` syntax check on every changed script
 - [x] Local smoke against `agents/_shared` produces expected `[reconcile] starting … complete` flow
 - [ ] Post-merge: cut next agent-smith release, bump homelab chart pin, observe `claude plugin list` showing `matrix@claude-code-channel-matrix v0.7.0` on the rolled pods (proves the upgrade fired)
-- [ ] Post-merge: bump `plugin-manifest.json` to a future version, roll pods, verify the reconciler emits the upgrade
+- [ ] Post-merge: bump `settings.json (enabledPlugins)` to a future version, roll pods, verify the reconciler emits the upgrade
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
 EOF

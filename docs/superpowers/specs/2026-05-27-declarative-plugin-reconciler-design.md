@@ -46,9 +46,10 @@ mechanism exists.
 Introduce a thin reconciler that converges three pieces of state from
 two declarative sources:
 
-- **Sources:** `agents/_shared/settings.json` (marketplaces + enable
-  toggles) + new `agents/_shared/plugin-manifest.json` (per-plugin
-  declared version)
+- **Source:** `agents/_shared/settings.json` — a single file declares
+  marketplaces (in `extraKnownMarketplaces`) AND plugin versions (in
+  `enabledPlugins`, with values upgraded from `true` to
+  `{ "version": "X.Y.Z" }`). No separate manifest file.
 - **Convergence targets:** registered marketplaces, refreshed marketplace
   caches, installed plugins
 
@@ -82,15 +83,12 @@ calls it where the imperative `claude plugin install` lines used to be.
 ## Architecture
 
 ```
-┌──────────────────────────────┐         ┌──────────────────────────────┐
-│ agents/_shared/              │         │ agents/_shared/              │
-│   settings.json              │         │   plugin-manifest.json       │
-│   .extraKnownMarketplaces    │         │   .plugins{name: {version}}  │
-│   .enabledPlugins            │         │                              │
-└──────────────┬───────────────┘         └──────────────┬───────────────┘
-               │                                        │
-               └─────────────┬──────────────────────────┘
-                             ▼
+┌────────────────────────────────────────────────────┐
+│ agents/_shared/settings.json                       │
+│   .extraKnownMarketplaces  → marketplace sources   │
+│   .enabledPlugins          → {plugin: {version}}   │
+└────────────────────────┬───────────────────────────┘
+                         ▼
               ┌────────────────────────────────┐
               │ scripts/reconcile-plugins.sh   │
               │                                │
@@ -129,7 +127,7 @@ For each entry in `settings.json.extraKnownMarketplaces`:
 
 ### Plugin lifecycle (handled by reconciler)
 
-For each entry in `plugin-manifest.json.plugins`:
+For each entry in `settings.json.enabledPlugins` (extended-object shape — see Schema below):
 
 1. Read `~/.claude/plugins/installed_plugins.json`. Parse the installed
    version for `<name>@<marketplace>`.
@@ -143,31 +141,46 @@ For each entry in `plugin-manifest.json.plugins`:
    and continue. Operator's signal that the manifest is ahead of the
    marketplace (e.g. version not yet published).
 
-### Manifest schema
+### Schema (single source of truth: `settings.json`)
 
-`agents/_shared/plugin-manifest.json`:
+`agents/_shared/settings.json.enabledPlugins` carries the version as
+part of the existing per-plugin object. The current `true` value
+becomes a structured object:
 
-```json
+```jsonc
 {
-  "plugins": {
-    "matrix@claude-code-channel-matrix":  { "version": "0.7.0" },
-    "superpowers@claude-plugins-official": { "version": "5.1.0" }
+  "extraKnownMarketplaces": {                              // existing, unchanged
+    "claude-code-channel-matrix": {
+      "source": { "source": "github", "repo": "sherodtaylor/claude-code-channel-matrix" }
+    },
+    "claude-plugins-official": {
+      "source": { "source": "github", "repo": "anthropics/claude-plugins-official" }
+    }
+  },
+  "enabledPlugins": {
+    "matrix@claude-code-channel-matrix":  { "version": "0.7.0" },   // was: true
+    "superpowers@claude-plugins-official": { "version": "5.1.0" }   // was: true
   }
 }
 ```
 
-- Map keyed by `<plugin-name>@<marketplace-name>` — same identifier
-  `claude plugin install/uninstall` takes.
-- Each value is an object (not just a version string) so future
-  fields can land additively: `{ "version": "0.7.0", "userConfig":
-  { "key": "value" } }` for `claude plugin install --config`,
-  `{ "version": "0.7.0", "enabled": false }` to opt out without
-  removing the manifest entry, etc.
-- The marketplace SOURCE stays declared in `settings.json.extraKnownMarketplaces`.
-  Not duplicated here. One place per concern.
-- The `enabledPlugins: true` toggle in `settings.json` continues to
-  control enable/disable independently of the manifest. The reconciler
-  does not touch `enabledPlugins`.
+- One file, one source of truth. No separate manifest. The reconciler
+  reads `extraKnownMarketplaces` for sources + `enabledPlugins` for
+  names and pinned versions, both from the same `settings.json`.
+- The shape change for `enabledPlugins` values (`true` → `{ "version": "X.Y.Z" }`)
+  remains backward-compatible with Claude Code itself: it ignores
+  unknown fields and treats either form as "enabled." A plain
+  `true` value continues to mean "enabled, no version pin" for cases
+  where we don't care to pin (the reconciler skips drift checks on
+  those entries and just ensures they're installed).
+- Each value is an object so future fields can land additively:
+  `{ "version": "0.7.0", "userConfig": { "key": "value" } }` for
+  `claude plugin install --config`, `{ "version": "0.7.0",
+  "enabled": false }` to opt out without removing the entry, etc.
+- The marketplace SOURCE stays declared in
+  `settings.json.extraKnownMarketplaces` (same file, same
+  declaration as today). The reconciler converges marketplaces first,
+  then plugins.
 
 ### Reconciler script
 
@@ -176,8 +189,7 @@ For each entry in `plugin-manifest.json.plugins`:
 **Dependencies:** `jq`, `claude plugin` CLI (both already in the image).
 
 **Inputs:**
-- `${APP_DIR}/agents/_shared/settings.json` (read for `extraKnownMarketplaces`)
-- `${APP_DIR}/agents/_shared/plugin-manifest.json` (read for plugins)
+- `${APP_DIR}/agents/_shared/settings.json` (read for `extraKnownMarketplaces` AND `enabledPlugins`)
 - `${HOME}/.claude/plugins/installed_plugins.json` (read for current state)
 
 **Behavior summary:**
@@ -196,8 +208,8 @@ for marketplace_name in <keys from settings.json.extraKnownMarketplaces>; do
 done
 
 # Phase 2: plugins
-for plugin_id in <keys from plugin-manifest.json.plugins>; do
-  declared=<version from manifest>
+for plugin_id in <keys from settings.json.enabledPlugins>; do
+  declared=<.enabledPlugins[plugin_id].version, or "" if plain `true`>
   installed=<version from installed_plugins.json or "" if absent>
   if [ "${installed}" = "${declared}" ]; then
     echo "[reconcile] ${plugin_id}: in sync at ${declared}"
@@ -246,7 +258,7 @@ echo "[setup] matrix channel plugin installed"
 With:
 
 ```bash
-# Reconcile plugins declaratively from agents/_shared/plugin-manifest.json.
+# Reconcile plugins declaratively from agents/_shared/settings.json.
 # Marketplaces are registered + refreshed; installed plugins are upgraded
 # to match the manifest's declared versions. Best-effort; failures log
 # [reconcile] WARN: ... and do not block boot.
@@ -254,8 +266,10 @@ bash "${APP_DIR}/scripts/reconcile-plugins.sh"
 ```
 
 The `agents/_shared/settings.json` continues to declare
-`extraKnownMarketplaces` and `enabledPlugins` (no change). The new
-`agents/_shared/plugin-manifest.json` is shipped alongside.
+`extraKnownMarketplaces`. Its `enabledPlugins` values change shape
+from `true` to `{ "version": "X.Y.Z" }` for plugins we want pinned
+(the reconciler accepts either form; pinned ones get drift checks,
+plain-`true` ones just get installed-if-missing).
 
 ### Tests
 
@@ -271,7 +285,7 @@ Coverage:
 | Plugin at wrong version | installed version mismatches manifest | reconciler calls `uninstall` then `install` |
 | Install failure | mocked `claude plugin install` returns non-zero | reconciler logs WARN, exits 0, moves to next plugin |
 | Marketplace not registered | `marketplace add` is called before any plugin op | call order asserted |
-| Empty manifest | `plugin-manifest.json` has `{"plugins": {}}` | reconciler exits 0 with no plugin ops |
+| Empty enabledPlugins | `settings.json.enabledPlugins` is `{}` | reconciler exits 0 with no plugin ops |
 
 Mocking strategy: PATH-shimmed `claude` wrapper that records args into a
 file the test reads. No network, no real plugin installs. Smoke runs
@@ -281,23 +295,25 @@ offline.
 
 | File | Change |
 |------|--------|
-| `agents/_shared/plugin-manifest.json` | **New.** Manifest declaring plugins + versions. Initial content: `matrix@claude-code-channel-matrix: 0.7.0` and `superpowers@claude-plugins-official: 5.1.0`. |
+| `agents/_shared/settings.json` | **Modified.** `enabledPlugins` values change from `true` to `{ "version": "0.7.0" }` (matrix) and `{ "version": "5.1.0" }` (superpowers). `extraKnownMarketplaces` unchanged. |
 | `scripts/reconcile-plugins.sh` | **New.** Executable bash reconciler (~80 lines). |
 | `scripts/setup.sh` | **Modified.** Replace lines 73-77 (imperative `marketplace add` + `install`) with a single `bash "${APP_DIR}/scripts/reconcile-plugins.sh"` invocation. |
 | `tests/test-reconcile.sh` | **New.** Smoke tests against PATH-shimmed `claude` CLI. |
 | `Dockerfile` | **Unchanged.** No new deps; `jq` already present. |
 | `agents/_shared/.mcp.json` | **Unchanged.** Still imperatively copied by setup.sh. |
-| `agents/_shared/settings.json` | **Unchanged.** `extraKnownMarketplaces` + `enabledPlugins` continue to declare marketplaces + enable-toggles. |
 | `CHANGELOG.md` | **Modified.** Entry under `[Unreleased]` describing the reconciler. |
 
-Estimated diff: ~120 lines added (reconciler + manifest + tests), ~10
-removed (the imperative lines in setup.sh), no Dockerfile changes.
-Single PR.
+Estimated diff: ~110 lines added (reconciler + tests), ~10
+removed (the imperative lines in setup.sh), `enabledPlugins` value
+shape change in settings.json (2 lines). No Dockerfile changes,
+no separate manifest file. Single PR.
 
 ## Acceptance Criteria
 
-- [ ] `agents/_shared/plugin-manifest.json` exists and lists every
-      plugin already declared in `settings.json.enabledPlugins`.
+- [ ] `agents/_shared/settings.json.enabledPlugins` values are objects
+      (`{ "version": "X.Y.Z" }`) for every plugin we want pinned.
+      Plain-`true` values continue to mean "enabled, no version pin"
+      and are accepted without change.
 - [ ] `scripts/reconcile-plugins.sh` exists, executable, runs cleanly
       against a healthy install (zero diffs, exit 0).
 - [ ] `scripts/setup.sh` no longer contains imperative
@@ -310,7 +326,8 @@ Single PR.
       boots, runs the reconciler, and `claude plugin list` shows
       `matrix@claude-code-channel-matrix: Version: 0.7.0` (the
       currently-stuck-at-0.6.0 plugin upgrades automatically).
-- [ ] Bumping `plugin-manifest.json` to a future version (e.g. 0.7.1
+- [ ] Bumping a version in `settings.json.enabledPlugins` to a future
+      release (e.g. 0.7.1
       after a hypothetical fork release) and rolling pods causes the
       upgrade with no other intervention.
 - [ ] Declaring a version the marketplace doesn't yet serve produces a

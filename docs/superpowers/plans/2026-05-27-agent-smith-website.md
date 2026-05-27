@@ -4,7 +4,7 @@
 
 **Goal:** Ship a public-facing website for agent-smith hosted on GitHub Pages — landing page, Starlight-powered docs, chronological event log — built with Astro 5 + Bun, deployed via GitHub Actions, with a strict perf budget and zero third-party dependencies.
 
-**Architecture:** All site code lives under `web/` in this repo. Astro 5 with islands for the few interactive bits (no full SPA). Starlight handles `/docs`. Tokens + JetBrains Mono drive the dark-only terminal-as-zine visual system. A GitHub Actions workflow builds on push to `main` (touching `web/**`, `docs/**`, or `web/src/content/log/**`), runs Lighthouse-CI against the perf budget, deploys via `actions/deploy-pages`. PR merges in `agent-smith` and `homelab` produce log entries via `repository_dispatch` plus a small workflow that commits a new MDX file.
+**Architecture:** All site code lives under `website/` in this repo. Astro 5 with islands for the few interactive bits (no full SPA). Starlight handles `/docs`. Tokens + JetBrains Mono drive the dark-only terminal-as-zine visual system. A GitHub Actions workflow builds on push to `main` (touching `website/**`, `docs/**`, or `website/src/content/log/**`), runs Lighthouse-CI against the perf budget, deploys via `actions/deploy-pages`. PR merges in `agent-smith` and `homelab` produce log entries via `repository_dispatch` plus a small workflow that commits a new MDX file.
 
 **Tech Stack:** Astro 5, `@astrojs/starlight`, `@astrojs/mdx`, `@astrojs/sitemap`, `@fontsource/jetbrains-mono`, `@lottiefiles/lottie-player`, Bun 1.x, GitHub Actions, Lighthouse CI.
 
@@ -30,7 +30,7 @@ Working defaults — flag in PR description so Sherod can override.
 Files to be created. Numbers in parens map to the task that creates the file.
 
 ```
-web/
+website/
 ├── astro.config.mjs                                    (T03)
 ├── package.json                                        (T02)
 ├── tsconfig.json                                       (T02)
@@ -117,19 +117,19 @@ Expected: `On branch feat/website-v1 / nothing to commit, working tree clean`
 Run: `bun --version`
 Expected: `1.x.x` (any 1.x). If missing, install via `curl -fsSL --cacert /root/iron-proxy.crt https://bun.sh/install | bash` and re-exec shell.
 
-### Task 2: Initialize Astro project under `web/`
+### Task 2: Initialize Astro project under `website/`
 
 **Files:**
-- Create: `web/package.json`
-- Create: `web/tsconfig.json`
-- Create: `web/bun.lockb`
-- Create: `web/.gitignore`
+- Create: `website/package.json`
+- Create: `website/tsconfig.json`
+- Create: `website/bun.lockb`
+- Create: `website/.gitignore`
 
-- [ ] **Step 1: Create `web/` directory and scaffold Astro**
+- [ ] **Step 1: Create `website/` directory and scaffold Astro**
 
 ```bash
 mkdir -p web
-cd web
+cd website
 bun create astro@latest . --template minimal --typescript strict --no-install --no-git --skip-houston
 ```
 
@@ -142,7 +142,7 @@ bun add astro@^5 @astrojs/starlight@latest @astrojs/mdx@latest @astrojs/sitemap@
 bun add -d @types/bun @lhci/cli@latest typescript@^5
 ```
 
-- [ ] **Step 3: Edit `web/.gitignore`** — append:
+- [ ] **Step 3: Edit `website/.gitignore`** — append:
 
 ```
 node_modules/
@@ -159,16 +159,16 @@ Expected: `5.x.x`
 - [ ] **Step 5: Commit**
 
 ```bash
-git add web/package.json web/tsconfig.json web/bun.lockb web/.gitignore
-git commit -m "chore(web): scaffold Astro 5 project under web/"
+git add website/package.json website/tsconfig.json website/bun.lockb website/.gitignore
+git commit -m "chore(website): scaffold Astro 5 project under website/"
 ```
 
 ### Task 3: Wire Astro config (Starlight, MDX, sitemap, base path)
 
 **Files:**
-- Modify: `web/astro.config.mjs`
+- Modify: `website/astro.config.mjs`
 
-- [ ] **Step 1: Replace `web/astro.config.mjs` with**
+- [ ] **Step 1: Replace `website/astro.config.mjs` with**
 
 ```js
 import { defineConfig } from 'astro/config';
@@ -208,7 +208,7 @@ export default defineConfig({
 
 - [ ] **Step 2: Create the placeholder `empty.astro`**
 
-`web/src/components/empty.astro`:
+`website/src/components/empty.astro`:
 ```astro
 ---
 // Stub used to disable Starlight's theme toggle (dark-only site).
@@ -217,19 +217,19 @@ export default defineConfig({
 
 - [ ] **Step 3: Verify build succeeds with no content yet**
 
-Run: `bun run build` from `web/`. Expected: it will fail (no content collections defined) — record the error to confirm we know the gate.
+Run: `bun run build` from `website/`. Expected: it will fail (no content collections defined) — record the error to confirm we know the gate.
 
 - [ ] **Step 4: Commit**
 
 ```bash
-git add web/astro.config.mjs web/src/components/empty.astro
-git commit -m "feat(web): astro config — starlight, mdx, sitemap, base=/agent-smith, dark-only"
+git add website/astro.config.mjs website/src/components/empty.astro
+git commit -m "feat(website): astro config — starlight, mdx, sitemap, base=/agent-smith, dark-only"
 ```
 
-### Task 4: Add Bun task scripts to `web/package.json`
+### Task 4: Add Bun task scripts to `website/package.json`
 
 **Files:**
-- Modify: `web/package.json`
+- Modify: `website/package.json`
 
 - [ ] **Step 1: Ensure scripts block includes**
 
@@ -247,16 +247,16 @@ git commit -m "feat(web): astro config — starlight, mdx, sitemap, base=/agent-
 - [ ] **Step 2: Commit**
 
 ```bash
-git add web/package.json
-git commit -m "chore(web): add dev/build/test/lhci scripts"
+git add website/package.json
+git commit -m "chore(website): add dev/build/test/lhci scripts"
 ```
 
 ### Task 5: Drop in a favicon placeholder
 
 **Files:**
-- Create: `web/public/favicon.svg`
+- Create: `website/public/favicon.svg`
 
-- [ ] **Step 1: Create `web/public/favicon.svg`** — a 32x32 dollar-sign glyph in `--accent`:
+- [ ] **Step 1: Create `website/public/favicon.svg`** — a 32x32 dollar-sign glyph in `--accent`:
 
 ```svg
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
@@ -269,8 +269,8 @@ git commit -m "chore(web): add dev/build/test/lhci scripts"
 - [ ] **Step 2: Commit**
 
 ```bash
-git add web/public/favicon.svg
-git commit -m "feat(web): add favicon — $ glyph in accent"
+git add website/public/favicon.svg
+git commit -m "feat(website): add favicon — $ glyph in accent"
 ```
 
 ---
@@ -280,9 +280,9 @@ git commit -m "feat(web): add favicon — $ glyph in accent"
 ### Task 6: Define design tokens (palette, type scale, spacing)
 
 **Files:**
-- Create: `web/src/styles/tokens.css`
+- Create: `website/src/styles/tokens.css`
 
-- [ ] **Step 1: Write `web/src/styles/tokens.css`** (full contents):
+- [ ] **Step 1: Write `website/src/styles/tokens.css`** (full contents):
 
 ```css
 @import '@fontsource/jetbrains-mono/400.css';
@@ -330,16 +330,16 @@ git commit -m "feat(web): add favicon — $ glyph in accent"
 - [ ] **Step 2: Commit**
 
 ```bash
-git add web/src/styles/tokens.css
-git commit -m "feat(web): design tokens — palette, JetBrains Mono, 8px scale"
+git add website/src/styles/tokens.css
+git commit -m "feat(website): design tokens — palette, JetBrains Mono, 8px scale"
 ```
 
 ### Task 7: Write base global styles (resets, body chrome)
 
 **Files:**
-- Create: `web/src/styles/global.css`
+- Create: `website/src/styles/global.css`
 
-- [ ] **Step 1: Write `web/src/styles/global.css`**:
+- [ ] **Step 1: Write `website/src/styles/global.css`**:
 
 ```css
 *, *::before, *::after { box-sizing: border-box; }
@@ -401,16 +401,16 @@ main { max-width: 1200px; margin: 0 auto; padding: var(--space-12) var(--space-6
 - [ ] **Step 2: Commit**
 
 ```bash
-git add web/src/styles/global.css
-git commit -m "feat(web): global styles — reset, body chrome, focus rings, reduced motion"
+git add website/src/styles/global.css
+git commit -m "feat(website): global styles — reset, body chrome, focus rings, reduced motion"
 ```
 
 ### Task 8: Build the base layout
 
 **Files:**
-- Create: `web/src/layouts/BaseLayout.astro`
+- Create: `website/src/layouts/BaseLayout.astro`
 
-- [ ] **Step 1: Write `web/src/layouts/BaseLayout.astro`**:
+- [ ] **Step 1: Write `website/src/layouts/BaseLayout.astro`**:
 
 ```astro
 ---
@@ -456,14 +456,14 @@ const { title, description = 'Your engineering team, running in Kubernetes.' } =
 - [ ] **Step 2: Commit**
 
 ```bash
-git add web/src/layouts/BaseLayout.astro
-git commit -m "feat(web): BaseLayout — title/og, skip link, footer slot"
+git add website/src/layouts/BaseLayout.astro
+git commit -m "feat(website): BaseLayout — title/og, skip link, footer slot"
 ```
 
 ### Task 9: Tmux-style status bar component
 
 **Files:**
-- Create: `web/src/components/TmuxStatusBar.astro`
+- Create: `website/src/components/TmuxStatusBar.astro`
 
 - [ ] **Step 1: Write component**:
 
@@ -507,7 +507,7 @@ const prsThisWeek = statusData.prs_this_week ?? 0;
 </style>
 ```
 
-- [ ] **Step 2: Seed `web/src/data/crew-status.json`** with placeholder values so the component renders during dev (real values come from T31):
+- [ ] **Step 2: Seed `website/src/data/crew-status.json`** with placeholder values so the component renders during dev (real values come from T31):
 
 ```json
 {
@@ -521,26 +521,26 @@ const prsThisWeek = statusData.prs_this_week ?? 0;
 }
 ```
 
-(Note: `web/src/data/crew-status.json` is gitignored — keep this seed in `web/src/data/crew-status.example.json` and document a copy step in `web/README.md`.)
+(Note: `website/src/data/crew-status.json` is gitignored — keep this seed in `website/src/data/crew-status.example.json` and document a copy step in `website/README.md`.)
 
 - [ ] **Step 3: Add the example file properly**
 
 ```bash
-mv web/src/data/crew-status.json web/src/data/crew-status.example.json
-cp web/src/data/crew-status.example.json web/src/data/crew-status.json
+mv website/src/data/crew-status.json website/src/data/crew-status.example.json
+cp website/src/data/crew-status.example.json website/src/data/crew-status.json
 ```
 
 - [ ] **Step 4: Commit**
 
 ```bash
-git add web/src/components/TmuxStatusBar.astro web/src/data/crew-status.example.json
-git commit -m "feat(web): TmuxStatusBar component + crew-status example data"
+git add website/src/components/TmuxStatusBar.astro website/src/data/crew-status.example.json
+git commit -m "feat(website): TmuxStatusBar component + crew-status example data"
 ```
 
 ### Task 10: Hero pane component
 
 **Files:**
-- Create: `web/src/components/HeroPane.astro`
+- Create: `website/src/components/HeroPane.astro`
 
 - [ ] **Step 1: Write component**:
 
@@ -587,14 +587,14 @@ const { prompt = '$', tagline, sub, ctas } = Astro.props;
 - [ ] **Step 2: Commit**
 
 ```bash
-git add web/src/components/HeroPane.astro
-git commit -m "feat(web): HeroPane component — prompt, tagline, sub, dual CTA"
+git add website/src/components/HeroPane.astro
+git commit -m "feat(website): HeroPane component — prompt, tagline, sub, dual CTA"
 ```
 
 ### Task 11: Audit-tail (recent log entries) component
 
 **Files:**
-- Create: `web/src/components/AuditTail.astro`
+- Create: `website/src/components/AuditTail.astro`
 
 - [ ] **Step 1: Write component**:
 
@@ -642,14 +642,14 @@ const entries = (await getCollection('log'))
 - [ ] **Step 2: Commit**
 
 ```bash
-git add web/src/components/AuditTail.astro
-git commit -m "feat(web): AuditTail — most-recent log entries pane"
+git add website/src/components/AuditTail.astro
+git commit -m "feat(website): AuditTail — most-recent log entries pane"
 ```
 
 ### Task 12: ASCII box wrapper component
 
 **Files:**
-- Create: `web/src/components/AsciiBox.astro`
+- Create: `website/src/components/AsciiBox.astro`
 
 - [ ] **Step 1: Write component**:
 
@@ -676,14 +676,14 @@ const { ariaLabel } = Astro.props;
 - [ ] **Step 2: Commit**
 
 ```bash
-git add web/src/components/AsciiBox.astro
-git commit -m "feat(web): AsciiBox — accessible <pre> wrapper for diagrams"
+git add website/src/components/AsciiBox.astro
+git commit -m "feat(website): AsciiBox — accessible <pre> wrapper for diagrams"
 ```
 
 ### Task 13: Status badge component
 
 **Files:**
-- Create: `web/src/components/StatusBadge.astro`
+- Create: `website/src/components/StatusBadge.astro`
 
 - [ ] **Step 1: Write component**:
 
@@ -711,14 +711,14 @@ const glyph: Record<Status, string> = { ok: '✓', warn: '!', fail: '✗', runni
 - [ ] **Step 2: Commit**
 
 ```bash
-git add web/src/components/StatusBadge.astro
-git commit -m "feat(web): StatusBadge — ok/warn/fail/running glyphs"
+git add website/src/components/StatusBadge.astro
+git commit -m "feat(website): StatusBadge — ok/warn/fail/running glyphs"
 ```
 
 ### Task 14: Cursor blink component (accent block cursor)
 
 **Files:**
-- Create: `web/src/components/CursorBlink.astro`
+- Create: `website/src/components/CursorBlink.astro`
 
 - [ ] **Step 1: Write component**:
 
@@ -740,14 +740,14 @@ git commit -m "feat(web): StatusBadge — ok/warn/fail/running glyphs"
 - [ ] **Step 2: Commit**
 
 ```bash
-git add web/src/components/CursorBlink.astro
-git commit -m "feat(web): CursorBlink — accent block cursor with reduced-motion fallback"
+git add website/src/components/CursorBlink.astro
+git commit -m "feat(website): CursorBlink — accent block cursor with reduced-motion fallback"
 ```
 
 ### Task 15: Verify the visual primitives render in a smoke page
 
 **Files:**
-- Create: `web/src/pages/index.astro` (initial skeleton — sections added in T18-T20)
+- Create: `website/src/pages/index.astro` (initial skeleton — sections added in T18-T20)
 
 - [ ] **Step 1: Write minimal smoke `index.astro` exercising all primitives**:
 
@@ -785,7 +785,7 @@ import CursorBlink from '../components/CursorBlink.astro';
 
 This is required for the dev server to start. T16 expands it.
 
-`web/src/content/config.ts`:
+`website/src/content/config.ts`:
 ```ts
 import { defineCollection, z } from 'astro:content';
 
@@ -806,7 +806,7 @@ export const collections = { log };
 
 - [ ] **Step 3: Add a placeholder log entry so AuditTail has data to render**
 
-`web/src/content/log/2026-05-27-website-spec-merged.mdx`:
+`website/src/content/log/2026-05-27-website-spec-merged.mdx`:
 ```mdx
 ---
 timestamp: 2026-05-27T00:00:00Z
@@ -821,20 +821,20 @@ Seed entry. PR-merge → log workflow (Task 37) will produce real entries once l
 
 - [ ] **Step 4: Run the dev server**
 
-Run: `cd web && bun run dev`
+Run: `cd website && bun run dev`
 Visit: `http://localhost:4321/agent-smith/`
 Expected: page renders with hero, status badge, cursor blink, ASCII box, and one log entry.
 
 - [ ] **Step 5: Run the build**
 
-Run: `bun run build` from `web/`
-Expected: success; output in `web/dist/`.
+Run: `bun run build` from `website/`
+Expected: success; output in `website/dist/`.
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add web/src/pages/index.astro web/src/content/config.ts web/src/content/log/2026-05-27-website-spec-merged.mdx
-git commit -m "feat(web): smoke index page + log content collection + seed entry"
+git add website/src/pages/index.astro website/src/content/config.ts website/src/content/log/2026-05-27-website-spec-merged.mdx
+git commit -m "feat(website): smoke index page + log content collection + seed entry"
 ```
 
 ---
@@ -844,11 +844,11 @@ git commit -m "feat(web): smoke index page + log content collection + seed entry
 ### Task 16: Confirm log content collection schema (review T15)
 
 **Files:**
-- Existing: `web/src/content/config.ts` (already created in T15)
+- Existing: `website/src/content/config.ts` (already created in T15)
 
 - [ ] **Step 1: Write the schema unit test**
 
-`web/src/content/config.test.ts`:
+`website/src/content/config.test.ts`:
 ```ts
 import { describe, expect, test } from 'bun:test';
 import { z } from 'astro:content';
@@ -895,20 +895,20 @@ describe('log collection schema', () => {
 
 - [ ] **Step 2: Run test**
 
-Run: `cd web && bun test src/content/config.test.ts`
+Run: `cd website && bun test src/content/config.test.ts`
 Expected: 3 passing.
 
 - [ ] **Step 3: Commit**
 
 ```bash
-git add web/src/content/config.test.ts
-git commit -m "test(web): log content collection schema — accept/reject paths"
+git add website/src/content/config.test.ts
+git commit -m "test(website): log content collection schema — accept/reject paths"
 ```
 
 ### Task 17: Add a second seed log entry (richer example)
 
 **Files:**
-- Create: `web/src/content/log/2026-05-26-roadmap-shipped.mdx`
+- Create: `website/src/content/log/2026-05-26-roadmap-shipped.mdx`
 
 - [ ] **Step 1: Write entry**
 
@@ -928,20 +928,20 @@ appendix mapping original v1 candidates to themes.
 
 - [ ] **Step 2: Verify build still passes**
 
-Run: `bun run build` from `web/`
+Run: `bun run build` from `website/`
 Expected: success; two log entries present.
 
 - [ ] **Step 3: Commit**
 
 ```bash
-git add web/src/content/log/2026-05-26-roadmap-shipped.mdx
-git commit -m "feat(web): seed log entry for the roadmap PR ship"
+git add website/src/content/log/2026-05-26-roadmap-shipped.mdx
+git commit -m "feat(website): seed log entry for the roadmap PR ship"
 ```
 
 ### Task 18: Landing — "What this is" narrative section
 
 **Files:**
-- Modify: `web/src/pages/index.astro`
+- Modify: `website/src/pages/index.astro`
 
 - [ ] **Step 1: Replace the smoke-test section with the narrative**
 
@@ -969,19 +969,19 @@ Locate the "Smoke test" `<h2>` through the closing of `<AuditTail />` and replac
 
 - [ ] **Step 2: Verify dev server renders the narrative**
 
-Run: `bun run dev` from `web/`. Visit landing. Expected: hero followed by `$ describe agent-smith` header and two paragraphs of body.
+Run: `bun run dev` from `website/`. Visit landing. Expected: hero followed by `$ describe agent-smith` header and two paragraphs of body.
 
 - [ ] **Step 3: Commit**
 
 ```bash
-git add web/src/pages/index.astro
-git commit -m "feat(web): landing — 'What this is' narrative section"
+git add website/src/pages/index.astro
+git commit -m "feat(website): landing — 'What this is' narrative section"
 ```
 
 ### Task 19: Landing — "What your team can do" 5-bullet section
 
 **Files:**
-- Modify: `web/src/pages/index.astro`
+- Modify: `website/src/pages/index.astro`
 
 - [ ] **Step 1: Insert after the narrative section** (before any closing tags):
 
@@ -1020,14 +1020,14 @@ Run: dev server, refresh. Expected: bullet list with dot markers in accent color
 - [ ] **Step 4: Commit**
 
 ```bash
-git add web/src/pages/index.astro
-git commit -m "feat(web): landing — 'What your team can do' 5-bullet section"
+git add website/src/pages/index.astro
+git commit -m "feat(website): landing — 'What your team can do' 5-bullet section"
 ```
 
 ### Task 20: Landing — "Under the hood" architecture section (ASCII boxes)
 
 **Files:**
-- Modify: `web/src/pages/index.astro`
+- Modify: `website/src/pages/index.astro`
 
 - [ ] **Step 1: Insert after the capabilities section**:
 
@@ -1070,14 +1070,14 @@ Run dev server, refresh, expand the diagram width on a wide viewport, then narro
 - [ ] **Step 3: Commit**
 
 ```bash
-git add web/src/pages/index.astro
-git commit -m "feat(web): landing — 'Under the hood' architecture section + crew status"
+git add website/src/pages/index.astro
+git commit -m "feat(website): landing — 'Under the hood' architecture section + crew status"
 ```
 
 ### Task 21: `/log` page (full list)
 
 **Files:**
-- Create: `web/src/pages/log/index.astro`
+- Create: `website/src/pages/log/index.astro`
 
 - [ ] **Step 1: Write page**
 
@@ -1134,8 +1134,8 @@ Visit `http://localhost:4321/agent-smith/log` — expected: full list of seed en
 - [ ] **Step 3: Commit**
 
 ```bash
-git add web/src/pages/log/index.astro
-git commit -m "feat(web): /log page — reverse-chronological feed"
+git add website/src/pages/log/index.astro
+git commit -m "feat(website): /log page — reverse-chronological feed"
 ```
 
 ---
@@ -1145,15 +1145,15 @@ git commit -m "feat(web): /log page — reverse-chronological feed"
 ### Task 22: Author the 7 docs pages
 
 **Files:**
-- Create: `web/src/content/docs/getting-started.md`
-- Create: `web/src/content/docs/architecture.md`
-- Create: `web/src/content/docs/agents.md`
-- Create: `web/src/content/docs/security.md`
-- Create: `web/src/content/docs/operations.md`
-- Create: `web/src/content/docs/contributing.md`
-- Create: `web/src/content/docs/roadmap.md`
+- Create: `website/src/content/docs/getting-started.md`
+- Create: `website/src/content/docs/architecture.md`
+- Create: `website/src/content/docs/agents.md`
+- Create: `website/src/content/docs/security.md`
+- Create: `website/src/content/docs/operations.md`
+- Create: `website/src/content/docs/contributing.md`
+- Create: `website/src/content/docs/roadmap.md`
 
-- [ ] **Step 1: Add Starlight to the content config** — modify `web/src/content/config.ts`:
+- [ ] **Step 1: Add Starlight to the content config** — modify `website/src/content/config.ts`:
 
 ```ts
 import { defineCollection, z } from 'astro:content';
@@ -1176,7 +1176,7 @@ const docs = defineCollection({ schema: docsSchema() });
 export const collections = { log, docs };
 ```
 
-- [ ] **Step 2: Author `web/src/content/docs/getting-started.md`** — minimal title + frontmatter, body pulls from current README:
+- [ ] **Step 2: Author `website/src/content/docs/getting-started.md`** — minimal title + frontmatter, body pulls from current README:
 
 ```md
 ---
@@ -1193,7 +1193,7 @@ agent-smith ships as a container image (`ghcr.io/sherodtaylor/agent-smith`) and 
 
 - [ ] **Step 3: Author the remaining 5 docs pages** — `architecture.md`, `agents.md`, `security.md`, `operations.md`, `contributing.md` — each with a frontmatter `title` + `description`, content lifted from the corresponding README section or runbook.
 
-- [ ] **Step 4: Author `web/src/content/docs/roadmap.md`** — copies content from `docs/roadmap-v1.md`:
+- [ ] **Step 4: Author `website/src/content/docs/roadmap.md`** — copies content from `docs/roadmap-v1.md`:
 
 ```md
 ---
@@ -1210,20 +1210,20 @@ import { Aside } from '@astrojs/starlight/components';
 
 - [ ] **Step 5: Verify the docs section builds + renders nav**
 
-Run: `bun run build` from `web/`. Expected: success. Visit `http://localhost:4321/agent-smith/docs/getting-started` — sidebar with 7 entries.
+Run: `bun run build` from `website/`. Expected: success. Visit `http://localhost:4321/agent-smith/docs/getting-started` — sidebar with 7 entries.
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add web/src/content/config.ts web/src/content/docs
-git commit -m "feat(web): docs section — 7 pages backed by Starlight"
+git add website/src/content/config.ts website/src/content/docs
+git commit -m "feat(website): docs section — 7 pages backed by Starlight"
 ```
 
 ### Task 23: Add a CI-time check that docs/roadmap-v1.md and docs/roadmap.md stay in sync
 
 **Files:**
-- Create: `web/scripts/check-roadmap-sync.ts`
-- Modify: `web/package.json` (add `"check:roadmap": "bun web/scripts/check-roadmap-sync.ts"`)
+- Create: `website/scripts/check-roadmap-sync.ts`
+- Modify: `website/package.json` (add `"check:roadmap": "bun website/scripts/check-roadmap-sync.ts"`)
 
 - [ ] **Step 1: Write the check script**
 
@@ -1249,14 +1249,14 @@ console.log('roadmap docs in sync ✓');
 
 - [ ] **Step 2: Run it once to confirm it passes**
 
-Run: `bun web/scripts/check-roadmap-sync.ts`
+Run: `bun website/scripts/check-roadmap-sync.ts`
 Expected: `roadmap docs in sync ✓`
 
 - [ ] **Step 3: Commit**
 
 ```bash
-git add web/scripts/check-roadmap-sync.ts web/package.json
-git commit -m "chore(web): roadmap sync check between repo + site copies"
+git add website/scripts/check-roadmap-sync.ts website/package.json
+git commit -m "chore(website): roadmap sync check between repo + site copies"
 ```
 
 ---
@@ -1266,7 +1266,7 @@ git commit -m "chore(web): roadmap sync check between repo + site copies"
 ### Task 24: Lottie player wrapper component
 
 **Files:**
-- Create: `web/src/components/LottiePlayer.astro`
+- Create: `website/src/components/LottiePlayer.astro`
 
 - [ ] **Step 1: Write component (lazy-loads the player only on visit)**
 
@@ -1317,14 +1317,14 @@ const { src, autoplay = true, loop = false, once = false, ariaLabel } = Astro.pr
 - [ ] **Step 2: Commit**
 
 ```bash
-git add web/src/components/LottiePlayer.astro
-git commit -m "feat(web): LottiePlayer — lazy-loaded, reduced-motion aware"
+git add website/src/components/LottiePlayer.astro
+git commit -m "feat(website): LottiePlayer — lazy-loaded, reduced-motion aware"
 ```
 
 ### Task 25: Hero boot-sequence animation
 
 **Files:**
-- Create: `web/src/animations/hero-boot.json`
+- Create: `website/src/animations/hero-boot.json`
 
 - [ ] **Step 1: Author a minimal hand-rolled Lottie JSON** — 3 seconds, types `$ agent-smith --hello` character by character into the prompt line.
 
@@ -1337,14 +1337,14 @@ git commit -m "feat(web): LottiePlayer — lazy-loaded, reduced-motion aware"
 - [ ] **Step 4: Commit**
 
 ```bash
-git add web/src/animations/hero-boot.json web/src/components/HeroPane.astro
-git commit -m "feat(web): hero boot-sequence Lottie — types into the prompt"
+git add website/src/animations/hero-boot.json website/src/components/HeroPane.astro
+git commit -m "feat(website): hero boot-sequence Lottie — types into the prompt"
 ```
 
 ### Task 26: Architecture-section ASCII-draw animation
 
 **Files:**
-- Create: `web/src/animations/ascii-draw.json`
+- Create: `website/src/animations/ascii-draw.json`
 
 - [ ] **Step 1: Author a Lottie that reveals the ASCII architecture diagram line-by-line over 2s**
 
@@ -1355,31 +1355,31 @@ git commit -m "feat(web): hero boot-sequence Lottie — types into the prompt"
 - [ ] **Step 4: Commit**
 
 ```bash
-git add web/src/animations/ascii-draw.json web/src/pages/index.astro
-git commit -m "feat(web): architecture diagram draw-in Lottie"
+git add website/src/animations/ascii-draw.json website/src/pages/index.astro
+git commit -m "feat(website): architecture diagram draw-in Lottie"
 ```
 
 ### Task 27: Log section newest-entry pulse animation
 
 **Files:**
-- Create: `web/src/animations/log-pulse.json`
+- Create: `website/src/animations/log-pulse.json`
 
 - [ ] **Step 1: Author a 1.5s soft-fade pulse in `--accent` color**
 
-- [ ] **Step 2: Apply it to the first `<li>` rendered in `AuditTail.astro` and `web/src/pages/log/index.astro`**
+- [ ] **Step 2: Apply it to the first `<li>` rendered in `AuditTail.astro` and `website/src/pages/log/index.astro`**
 
 - [ ] **Step 3: Verify total Lottie payload (player + 3 JSONs) fits the 60KB sub-budget**
 
 Run after build:
 ```bash
-cd web && du -b dist/_astro/*lottie*.js dist/_astro/*.json 2>/dev/null | awk '{s+=$1} END {print "total bytes:", s, "(budget: 60KB gzip ≈ 180KB raw)"}'
+cd website && du -b dist/_astro/*lottie*.js dist/_astro/*.json 2>/dev/null | awk '{s+=$1} END {print "total bytes:", s, "(budget: 60KB gzip ≈ 180KB raw)"}'
 ```
 
 - [ ] **Step 4: Commit**
 
 ```bash
-git add web/src/animations/log-pulse.json
-git commit -m "feat(web): log newest-entry pulse Lottie"
+git add website/src/animations/log-pulse.json
+git commit -m "feat(website): log newest-entry pulse Lottie"
 ```
 
 ---
@@ -1389,7 +1389,7 @@ git commit -m "feat(web): log newest-entry pulse Lottie"
 ### Task 28: robots.txt
 
 **Files:**
-- Create: `web/public/robots.txt`
+- Create: `website/public/robots.txt`
 
 - [ ] **Step 1: Write file**
 
@@ -1403,14 +1403,14 @@ Sitemap: https://sherodtaylor.github.io/agent-smith/sitemap-index.xml
 - [ ] **Step 2: Commit**
 
 ```bash
-git add web/public/robots.txt
-git commit -m "feat(web): robots.txt — allow-all + sitemap"
+git add website/public/robots.txt
+git commit -m "feat(website): robots.txt — allow-all + sitemap"
 ```
 
 ### Task 29: 404 page
 
 **Files:**
-- Create: `web/src/pages/404.astro`
+- Create: `website/src/pages/404.astro`
 
 - [ ] **Step 1: Write page**
 
@@ -1430,8 +1430,8 @@ import TmuxStatusBar from '../components/TmuxStatusBar.astro';
 - [ ] **Step 2: Commit**
 
 ```bash
-git add web/src/pages/404.astro
-git commit -m "feat(web): 404 page — terminal-styled"
+git add website/src/pages/404.astro
+git commit -m "feat(website): 404 page — terminal-styled"
 ```
 
 ---
@@ -1441,7 +1441,7 @@ git commit -m "feat(web): 404 page — terminal-styled"
 ### Task 30: TDD — write the test for `refresh-crew-status.ts`
 
 **Files:**
-- Create: `web/scripts/refresh-crew-status.test.ts`
+- Create: `website/scripts/refresh-crew-status.test.ts`
 
 - [ ] **Step 1: Write the failing test**
 
@@ -1479,20 +1479,20 @@ describe('buildCrewStatus', () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd web && bun test scripts/refresh-crew-status.test.ts`
+Run: `cd website && bun test scripts/refresh-crew-status.test.ts`
 Expected: FAIL — `module not found`.
 
 - [ ] **Step 3: Commit (test only, red)**
 
 ```bash
-git add web/scripts/refresh-crew-status.test.ts
-git commit -m "test(web): refresh-crew-status — aggregate PRs by author"
+git add website/scripts/refresh-crew-status.test.ts
+git commit -m "test(website): refresh-crew-status — aggregate PRs by author"
 ```
 
 ### Task 31: Implement `refresh-crew-status.ts`
 
 **Files:**
-- Create: `web/scripts/refresh-crew-status.ts`
+- Create: `website/scripts/refresh-crew-status.ts`
 
 - [ ] **Step 1: Write the implementation**
 
@@ -1574,19 +1574,19 @@ if (import.meta.main) {
 
 - [ ] **Step 2: Run tests**
 
-Run: `cd web && bun test scripts/refresh-crew-status.test.ts`
+Run: `cd website && bun test scripts/refresh-crew-status.test.ts`
 Expected: PASS (both tests).
 
 - [ ] **Step 3: Try the CLI locally**
 
-Run: `cd web && GITHUB_TOKEN=$(gh auth token) bun scripts/refresh-crew-status.ts`
-Expected: writes `web/src/data/crew-status.json` with real data; console echoes the path.
+Run: `cd website && GITHUB_TOKEN=$(gh auth token) bun scripts/refresh-crew-status.ts`
+Expected: writes `website/src/data/crew-status.json` with real data; console echoes the path.
 
 - [ ] **Step 4: Commit**
 
 ```bash
-git add web/scripts/refresh-crew-status.ts
-git commit -m "feat(web): refresh-crew-status.ts — gh-api → JSON for build-time status"
+git add website/scripts/refresh-crew-status.ts
+git commit -m "feat(website): refresh-crew-status.ts — gh-api → JSON for build-time status"
 ```
 
 ---
@@ -1607,7 +1607,7 @@ on:
   push:
     branches: [main]
     paths:
-      - 'web/**'
+      - 'website/**'
       - 'docs/**'
       - 'README.md'
       - '.github/workflows/website.yml'
@@ -1642,7 +1642,7 @@ jobs:
         working-directory: web
         run: bun run build
       - uses: actions/upload-pages-artifact@v3
-        with: { path: web/dist }
+        with: { path: website/dist }
 
   deploy:
     needs: build
@@ -1659,7 +1659,7 @@ jobs:
 
 ```bash
 git add .github/workflows/website.yml
-git commit -m "ci(website): build + deploy to GitHub Pages on web/docs changes"
+git commit -m "ci(website): build + deploy to GitHub Pages on website/docs changes"
 ```
 
 ### Task 33: Configure GitHub Pages source = Actions (manual UI step)
@@ -1695,16 +1695,16 @@ Expected: green build (deploy stage will be skipped or fail because `main` is th
 ### Task 35: Lighthouse CI perf-budget enforcement
 
 **Files:**
-- Create: `web/lighthouserc.json`
+- Create: `website/lighthouserc.json`
 - Create: `.github/workflows/lighthouse.yml`
 
-- [ ] **Step 1: Write `web/lighthouserc.json`**
+- [ ] **Step 1: Write `website/lighthouserc.json`**
 
 ```json
 {
   "ci": {
     "collect": {
-      "staticDistDir": "web/dist",
+      "staticDistDir": "website/dist",
       "url": ["http://localhost/agent-smith/", "http://localhost/agent-smith/log/"],
       "numberOfRuns": 3
     },
@@ -1728,10 +1728,10 @@ name: lighthouse
 
 on:
   pull_request:
-    paths: ['web/**']
+    paths: ['website/**']
   push:
     branches: [main]
-    paths: ['web/**']
+    paths: ['website/**']
 
 jobs:
   lhci:
@@ -1743,7 +1743,7 @@ jobs:
         working-directory: web
         run: bun install --frozen-lockfile
       - name: Seed crew-status
-        run: cp web/src/data/crew-status.example.json web/src/data/crew-status.json
+        run: cp website/src/data/crew-status.example.json website/src/data/crew-status.json
       - name: Build
         working-directory: web
         run: bun run build
@@ -1755,7 +1755,7 @@ jobs:
 - [ ] **Step 3: Commit both**
 
 ```bash
-git add web/lighthouserc.json .github/workflows/lighthouse.yml
+git add website/lighthouserc.json .github/workflows/lighthouse.yml
 git commit -m "ci(website): Lighthouse CI — perf + a11y budget enforcement"
 ```
 
@@ -1766,7 +1766,7 @@ git commit -m "ci(website): Lighthouse CI — perf + a11y budget enforcement"
 - [ ] **Step 1: Build + run LHCI locally**
 
 ```bash
-cd web && bun run build && bunx --bun @lhci/cli@latest autorun
+cd website && bun run build && bunx --bun @lhci/cli@latest autorun
 ```
 
 - [ ] **Step 2: Read output**
@@ -1838,10 +1838,10 @@ jobs:
 
           SLUG=$(echo "$TITLE" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/-\+/-/g' | sed 's/^-\|-$//g' | cut -c1-50)
           DATE=$(echo "$TS" | cut -c1-10)
-          FILE="web/src/content/log/${DATE}-pr-${NUMBER}-${SLUG}.mdx"
+          FILE="website/src/content/log/${DATE}-pr-${NUMBER}-${SLUG}.mdx"
           RUN=$(echo "${{ github.run_id }}" | sha1sum | cut -c1-6)
 
-          mkdir -p web/src/content/log
+          mkdir -p website/src/content/log
           cat > "$FILE" <<EOF
           ---
           timestamp: ${TS}
@@ -1922,12 +1922,12 @@ gh api repos/sherodtaylor/agent-smith/dispatches -X POST -f event_type=pr-merged
 
 Run: `gh run list -w log-pr-merge.yml --limit 1` then `gh run watch`.
 
-Expected: a new commit on the branch (or `main` if merged) of the form `chore(log): web/src/content/log/2026-05-27-pr-999-test-entry.mdx`.
+Expected: a new commit on the branch (or `main` if merged) of the form `chore(log): website/src/content/log/2026-05-27-pr-999-test-entry.mdx`.
 
 - [ ] **Step 3: Clean up the test entry**
 
 ```bash
-git rm web/src/content/log/2026-05-27-pr-999-test-entry.mdx
+git rm website/src/content/log/2026-05-27-pr-999-test-entry.mdx
 git commit -m "chore(log): remove smoke-test entry"
 ```
 
@@ -1935,13 +1935,13 @@ git commit -m "chore(log): remove smoke-test entry"
 
 ## Phase 9 — Docs for operators + custom-domain readiness
 
-### Task 39: `web/README.md` + `docs/runbooks/website-deploy.md`
+### Task 39: `website/README.md` + `docs/runbooks/website-deploy.md`
 
 **Files:**
-- Create: `web/README.md`
+- Create: `website/README.md`
 - Create: `docs/runbooks/website-deploy.md`
 
-- [ ] **Step 1: Write `web/README.md`**
+- [ ] **Step 1: Write `website/README.md`**
 
 ```md
 # web — agent-smith website
@@ -1983,7 +1983,7 @@ to know whether adopters land.
 # website-deploy
 
 ## Trigger
-Push to `main` touching `web/**`, `docs/**`, `README.md`, or
+Push to `main` touching `website/**`, `docs/**`, `README.md`, or
 `.github/workflows/website.yml` → `.github/workflows/website.yml`.
 
 ## First-time setup
@@ -1996,14 +1996,14 @@ Push to `main` touching `web/**`, `docs/**`, `README.md`, or
 - **Lottie payload over 60KB** — re-export with smaller frames or drop one of the 3 animations.
 
 ## Custom domain swap
-See `web/README.md#custom-domain-swap-when-ready`.
+See `website/README.md#custom-domain-swap-when-ready`.
 ```
 
 - [ ] **Step 3: Commit**
 
 ```bash
-git add web/README.md docs/runbooks/website-deploy.md
-git commit -m "docs: web/README + website-deploy runbook"
+git add website/README.md docs/runbooks/website-deploy.md
+git commit -m "docs: website/README + website-deploy runbook"
 ```
 
 ---
@@ -2017,7 +2017,7 @@ git commit -m "docs: web/README + website-deploy runbook"
 - [ ] **Step 1: Final local build verification**
 
 ```bash
-cd web && bun run check && bun test && bun run build
+cd website && bun run check && bun test && bun run build
 ```
 
 Expected: all green.
@@ -2054,7 +2054,7 @@ Implements the spec in docs/superpowers/specs/2026-05-26-agent-smith-website-des
 
 ## Verify
 
-- cd web && bun install && bun run build
+- cd website && bun install && bun run build
 - gh workflow run website.yml --ref feat/website-v1
 - Pages source is "GitHub Actions" (set in repo Settings → Pages first time only)
 - Visit https://sherodtaylor.github.io/agent-smith/ after merge

@@ -2,7 +2,7 @@
   "channelsEnabled": true,
   "extraKnownMarketplaces": {
     "claude-code-channel-matrix": {
-      "source": { "source": "github", "repo": "zekker6/claude-code-channel-matrix" }
+      "source": { "source": "github", "repo": "sherodtaylor/claude-code-channel-matrix" }
     },
     "claude-plugins-official": {
       "source": { "source": "github", "repo": "anthropics/claude-plugins-official" }

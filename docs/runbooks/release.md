@@ -129,3 +129,49 @@ Tags are the **only** trigger for the chart job (see `.github/workflows/docker.y
 a chart and never move `:latest`. The chart version is derived from the tag
 name (`GITHUB_REF_NAME#v`), so the chart and image are always at the same
 version — you can't release one without the other.
+
+## Staged release (per-agent canary)
+
+For `v0.2.0+` charts using the `agents: [...]` array shape, you can roll
+a single agent onto a new image tag while the rest of the fleet stays
+on the current tag — useful for surface-area changes (`setup.sh`, new
+chart template logic, plugin reconciler edits) where you want one
+agent to prove out before the others follow.
+
+### Steps
+
+1. Cut the release as usual (`cut-release.sh --version vX.Y.Z`). CI
+   publishes the new image + chart.
+2. In `k8s/apps/agents/agent-smith-fleet-helmrelease.yaml`, set
+   `agents[i].image.tag` on ONE agent (canonically `devbot` first) to
+   the new image tag. Leave the rest of the array entries without an
+   image override — they keep using the fleet-wide `.image.tag`.
+3. Flux reconciles → only that one agent's StatefulSet template
+   changes → only its pod rolls. Other agents stay pinned to the
+   previous tag.
+4. Observe ~24h. Verify the canary agent's setup completes cleanly,
+   the plugin reconciler runs, Matrix sync works, no regressions in
+   normal operations.
+5. **Promote**: remove the `image.tag` override from the canary
+   entry; the agent rolls onto the fleet default (still the previous
+   tag at this point).
+6. Bump the fleet-wide `.image.tag` to the new version. All remaining
+   agents roll. Canary agent stays as-is (already on the new tag).
+
+### Rollback
+
+Delete the `image.tag` override from the canary agent. Its
+StatefulSet template changes → pod rolls back to the fleet default
+(the previous tag). No data loss; PVCs are preserved across the
+roll.
+
+### Persona canary
+
+The same pattern works for persona changes via `configMapRef`:
+
+1. Create a new operator-supplied ConfigMap (e.g. `infrabot-persona-v4`)
+   alongside the existing `infrabot-persona-v3`.
+2. Set `agents[i].configMapRef: infrabot-persona-v4` on one agent.
+3. Observe; promote by pointing the rest of the fleet at v4.
+
+Rollback: re-point at `infrabot-persona-v3`.

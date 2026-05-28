@@ -21,6 +21,19 @@ cut-a-release procedure.
 
 ---
 
+## [0.2.4] - 2026-05-28
+
+Republish of 0.2.3 — no source changes. The 0.2.3 OCI tag was force-moved
+to roll the chart `MATRIX_HOMESERVER_URL` fix into the same release; Flux
+source-controller with `reconcileStrategy: ChartVersion` cached the
+pre-force-move 0.2.3 artifact and never re-pulled the new digest, so the
+fleet HR still rendered the broken chart. Cutting 0.2.4 sidesteps that
+cache by changing the version string. No code or template changes from
+0.2.3 (post force-move) — consult the [0.2.3] entry for the actual
+fixes.
+
+---
+
 ## [0.2.3] - 2026-05-28
 
 Patch release. Unblocks every v0.2.x fleet deployment by fixing two init

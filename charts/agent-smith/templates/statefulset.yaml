@@ -50,6 +50,11 @@ spec:
               value: {{ join " " $agent.agentRepos | quote }}
             - name: PRIMARY_REPO
               value: {{ $agent.primaryRepo | quote }}
+            {{- $homeserverUrl := default (default "" $root.Values.matrix.homeserverUrl) $agent.matrix.homeserverUrl }}
+            {{- if $homeserverUrl }}
+            - name: MATRIX_HOMESERVER_URL
+              value: {{ $homeserverUrl | quote }}
+            {{- end }}
             - name: MATRIX_BOT_USER_ID
               value: {{ $agent.matrix.botUserId | quote }}
             {{- if $agent.matrix.allowedUsers }}

@@ -30,6 +30,12 @@ image:
   tag: ""              # defaults to Chart.AppVersion when empty
   pullPolicy: IfNotPresent
 
+# Matrix homeserver shared across every agent in the fleet. Per-agent
+# botUserId / allowedUsers live under agents[].matrix; the homeserver URL
+# is fleet-wide unless a specific agent overrides via agents[].matrix.homeserverUrl.
+matrix:
+  homeserverUrl: ""
+
 # iron-proxy egress credential firewall integration. When enabled the pod's
 # dnsPolicy points at iron-proxy so HTTPS egress is intercepted and real
 # tokens are swapped at the edge.

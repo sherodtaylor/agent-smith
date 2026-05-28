@@ -1,0 +1,75 @@
+---
+import SpriteDevbot from './SpriteDevbot.astro';
+import SpriteInfrabot from './SpriteInfrabot.astro';
+import statusData from '../data/crew-status.json';
+
+type SpriteState = 'active' | 'vacation' | 'error';
+
+interface CrewAgent {
+  name?: string;
+  state?: string;
+}
+
+function stateOf(name: string): SpriteState {
+  const agents = (statusData.agents ?? []) as CrewAgent[];
+  const entry = agents.find((a) => a.name?.toLowerCase() === name.toLowerCase());
+  const raw = entry?.state;
+  if (raw === 'vacation' || raw === 'error') return raw;
+  return 'active';
+}
+
+const devbotState = stateOf('devbot');
+const infrabotState = stateOf('infrabot');
+---
+<section id="meet-the-crew" class="meet-crew" style="margin-top: var(--space-20);">
+  <h2>$ meet the crew</h2>
+  <p class="measure" style="color: var(--fg-muted);">
+    Two agents today, running as peers. One image, parametric persona —
+    new crew members are a directory under <code>agents/</code>, not a fork.
+  </p>
+  <div class="row">
+    <figure class="card">
+      <SpriteDevbot state={devbotState} size={128} />
+      <figcaption>
+        <strong>DevBot</strong> — code agent.
+        Reads the repo, opens PRs, addresses review, merges.
+      </figcaption>
+    </figure>
+    <figure class="card">
+      <SpriteInfrabot state={infrabotState} size={128} />
+      <figcaption>
+        <strong>InfraBot</strong> — infra agent.
+        Owns k3s + Flux, watches the cluster, ships manifests through GitOps.
+      </figcaption>
+    </figure>
+  </div>
+</section>
+
+<style>
+  .meet-crew h2 { margin-bottom: var(--space-4); }
+  .row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-8);
+    margin-top: var(--space-8);
+  }
+  .card {
+    margin: 0;
+    padding: var(--space-6);
+    background: var(--bg-elev);
+    border-radius: 6px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: var(--space-4);
+  }
+  .card figcaption {
+    color: var(--fg-muted);
+    max-width: 28ch;
+  }
+  .card figcaption strong { color: var(--fg); }
+  @media (max-width: 640px) {
+    .row { grid-template-columns: 1fr; }
+  }
+</style>

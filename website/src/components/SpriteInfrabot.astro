@@ -1,15 +1,24 @@
 ---
+// Inline the SVG at build time. See SpriteDevbot.astro for the LCP rationale.
+import active   from '../../public/sprites/infrabot.svg?raw';
+import vacation from '../../public/sprites/infrabot-vacation.svg?raw';
+import errorVar from '../../public/sprites/infrabot-error.svg?raw';
+
 type SpriteState = 'active' | 'vacation' | 'error';
 interface Props { state?: SpriteState; size?: number; ariaLabel?: string; }
 const { state = 'active', size = 64, ariaLabel } = Astro.props;
-const file = state === 'active' ? 'infrabot.svg' : `infrabot-${state}.svg`;
-const src = `${import.meta.env.BASE_URL}/sprites/${file}`;
+
+const sources: Record<SpriteState, string> = { active, vacation, error: errorVar };
 const label = ariaLabel ?? `InfraBot — infra agent (${state})`;
+const sized = sources[state]
+  .replace(/<svg\b/, `<svg width="${size}" height="${size}"`)
+  .replace(/aria-label="[^"]*"/, `aria-label="${label}"`);
 ---
-<img src={src} width={size} height={size} alt={label} class:list={['sprite', state]} loading="lazy" />
+<span class:list={['sprite', state]} set:html={sized} />
 
 <style>
-  .sprite { image-rendering: pixelated; image-rendering: -moz-crisp-edges; }
-  .sprite.vacation { filter: saturate(0.7); }
-  .sprite.error    { filter: hue-rotate(15deg); }
+  .sprite          { display: inline-block; line-height: 0; }
+  .sprite svg      { image-rendering: pixelated; image-rendering: -moz-crisp-edges; }
+  .sprite.vacation svg { filter: saturate(0.7); }
+  .sprite.error    svg { filter: hue-rotate(15deg); }
 </style>

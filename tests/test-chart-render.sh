@@ -187,5 +187,75 @@ assert_contains "$out" 'checksum/persona-alpha:' "checksum: alpha persona annota
 assert_contains "$out" 'checksum/persona-beta:'  "checksum: beta persona annotation"
 assert_contains "$out" 'checksum/shared:'         "checksum: shared annotation"
 
+# ── Case: legacy agentName shape still renders (deprecation shim) ──
+echo "[case] legacy agentName shape"
+cat > /tmp/values-legacy.yaml <<'EOF'
+image: { repository: ghcr.io/sherodtaylor/agent-smith, tag: v0.2.0 }
+agentName: legacybot
+existingSecret: legacybot-secrets
+matrix: { botUserId: "@legacybot:example.com" }
+agentRepos: [example/repo]
+primaryRepo: repo
+EOF
+out=$(render /tmp/values-legacy.yaml)
+sts_count=$(echo "$out" | grep -cE '^kind: StatefulSet' || true)
+assert_eq "$sts_count" "1" "legacy: one StatefulSet from synthetic array"
+assert_contains "$out" 'name: legacybot' "legacy: agentName interpolated into StatefulSet"
+
+# ── Case: both agents AND agentName set → render fails ──
+echo "[case] both shapes set → error"
+cat > /tmp/values-both.yaml <<'EOF'
+image: { repository: ghcr.io/sherodtaylor/agent-smith, tag: v0.2.0 }
+agentName: oops
+existingSecret: oops-secrets
+matrix: { botUserId: "@oops:example.com" }
+agentRepos: [example/repo]
+primaryRepo: repo
+agents:
+  - name: also-oops
+    existingSecret: also-oops-secrets
+    matrix: { botUserId: "@also-oops:example.com" }
+    agentRepos: [example/repo]
+    primaryRepo: repo
+EOF
+err=$(render_fails /tmp/values-both.yaml)
+assert_contains "$err" 'Both .Values.agentName and .Values.agents are set' "both-shape error: explanatory message"
+
+# ── Case: neither agents nor agentName set → render fails ──
+echo "[case] neither shape set → error"
+cat > /tmp/values-empty.yaml <<'EOF'
+image: { repository: ghcr.io/sherodtaylor/agent-smith, tag: v0.2.0 }
+agents: []
+EOF
+err=$(render_fails /tmp/values-empty.yaml)
+assert_contains "$err" 'Set either .Values.agents .* or .Values.agentName' "empty: explanatory error"
+
+# ── Case: per-agent image.tag override + fleet-default fallback ──
+echo "[case] per-agent image.tag override"
+cat > /tmp/values-tag-override.yaml <<'EOF'
+image:
+  repository: ghcr.io/sherodtaylor/agent-smith
+  tag: v0.2.0
+agents:
+  - name: alpha
+    existingSecret: alpha-secrets
+    image: { tag: v0.2.1 }
+    matrix: { botUserId: "@alpha:example.com" }
+    agentRepos: [example/repo]
+    primaryRepo: repo
+  - name: beta
+    existingSecret: beta-secrets
+    matrix: { botUserId: "@beta:example.com" }
+    agentRepos: [example/repo]
+    primaryRepo: repo
+EOF
+out=$(render /tmp/values-tag-override.yaml)
+# Two containers per StatefulSet (init "setup" + main "agent") so a healthy
+# override produces 2 occurrences of the override tag and 2 of the fallback.
+v021_count=$(echo "$out" | grep -cE 'agent-smith:v0\.2\.1' || true)
+v020_count=$(echo "$out" | grep -cE 'agent-smith:v0\.2\.0' || true)
+assert_eq "$v021_count" "2" "image override: 2 occurrences of v0.2.1 (alpha init + main)"
+assert_eq "$v020_count" "2" "image override: 2 occurrences of v0.2.0 (beta init + main, fallback to top-level)"
+
 echo "[test-chart-render] summary: pass=${PASS} fail=${FAIL}"
 exit $FAIL

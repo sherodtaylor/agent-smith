@@ -345,7 +345,8 @@ StatefulSet the same, so PVC ownership transfers transparently.
 | `charts/agent-smith/Chart.yaml` | **Modified** | Bump `version` to `0.2.0` (minor — breaking-with-shim) |
 | `scripts/setup.sh` | **Modified** | Read `CLAUDE.md` + `mcp.json` from `/etc/agent-smith/persona/` and `/etc/agent-smith/shared/` instead of `/opt/agent-smith/agents/<name>/`; concat logic preserved |
 | `agents/_shared/CLAUDE.md`, `agents/_shared/settings.json` | **Unchanged in repo location** | Still the source of truth in the chart source; chart-rendered into `agent-smith-shared` ConfigMap |
-| `agents/infrabot/CLAUDE.md`, `agents/devbot/CLAUDE.md`, per-agent `mcp.json`, `subagents/*` | **Unchanged in repo location** | Still in the image (image keeps them for legacy compatibility); chart-rendered into bundled default `agent-smith-persona-<name>` ConfigMaps |
+| `charts/agent-smith/agents/example-infrabot/`, `example-devbot/` | **New (chart-bundled)** | **Generic example personas only** — public chart must not ship operator-specific content. Source for chart-rendered `agent-smith-persona-<name>` ConfigMaps when an operator uses these names AND omits `configMapRef`. Production operators (including this homelab) override via `configMapRef` pointing at their own ConfigMaps. |
+| Top-level `agents/infrabot/`, `agents/devbot/` | **Removed** | Sherod-specific persona content moves out of the chart repo into operator-side ConfigMap manifests (in `sherodtaylor/homelab`). The chart-bundled `example-*` entries are documentation, not deployable production personas. |
 | `Dockerfile` | **Unchanged** | Persona files still copied to `/opt/agent-smith/agents/` for legacy shape compatibility during deprecation window |
 | `CHANGELOG.md` | **Modified** | Entry under `[Unreleased]` describing the array shape, persona mount, staging knobs, migration, and the deprecation window |
 | `docs/architecture.md` | **Modified** | Update the system overview to describe the array-of-agents pattern |

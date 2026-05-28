@@ -115,7 +115,7 @@ descend only when the layer above doesn't answer the question.
 |---|---|---|
 | **Understand the project** | [`README.md`](README.md) | [`docs/architecture.md`](docs/architecture.md) |
 | **Cut a release** | [`docs/runbooks/release.md`](docs/runbooks/release.md) | [`.claude/references/`](.claude/references/README.md), [`CHANGELOG.md`](CHANGELOG.md) |
-| **Add a new agent persona** | [`docs/runbooks/adding-agent.md`](docs/runbooks/adding-agent.md) | `agents/devbot/CLAUDE.md` as a template |
+| **Add a new agent persona** | [`docs/runbooks/adding-agent.md`](docs/runbooks/adding-agent.md) | `charts/agent-smith/agents/example-devbot/CLAUDE.md` as a template (production personas live in operator-supplied ConfigMaps, referenced via `configMapRef`) |
 | **Debug a 401 from Anthropic** | [`docs/runbooks/oauth-401.md`](docs/runbooks/oauth-401.md) | `scripts/claude-loop.sh`, iron-proxy logs |
 | **Diagnose an unresponsive agent** | [`docs/runbooks/agent-down.md`](docs/runbooks/agent-down.md) | pod logs, tmux attach, `claude-loop.sh` |
 | **Investigate a CI failure** | [`docs/runbooks/ci-failure.md`](docs/runbooks/ci-failure.md) | `.github/workflows/docker.yml` |

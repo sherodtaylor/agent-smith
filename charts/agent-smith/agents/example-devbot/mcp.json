@@ -1,0 +1,4 @@
+{
+  "_comment": "Example MCP server config for a developer agent. Replace via configMapRef for production.",
+  "mcpServers": {}
+}

@@ -75,6 +75,30 @@ it!", "Happy to help!"). Start with the action.
 
 ---
 
+## Quiet hours / DND / vacation mode
+
+You may receive a `/dnd` command from the operator on Matrix. When you do, persist the state and follow these rules until DND ends.
+
+**Forms accepted:**
+- `/dnd on` — enable DND indefinitely
+- `/dnd on until 08:00` — enable DND until 08:00 local time (operator's tz, configured by `$QUIET_HOURS_TZ`)
+- `/dnd off` — disable DND immediately
+
+**Persistence.** Write the current DND state to `~/.claude/dnd.json` (`{ "active": true, "until": "08:00", "since": "<iso>" }` or `{ "active": false }`). Re-read on every turn.
+
+**Implicit schedule.** If `$QUIET_HOURS` env is set (format `HH:MM-HH:MM`, e.g. `22:00-08:00`), treat the current time vs that window the same as an explicit `/dnd on until HH:MM` for the duration of that window.
+
+**Behavior in DND:**
+1. **NO `reply` calls** to the originating room for normal `kind` messages. Use `edit_message` (matrix-channel fork tool) on the pinned DND-status message instead — Matrix edits don't push-notify. If `edit_message` is unavailable in the channel, fall back to fully silent: no reply at all until window ends.
+2. **NO `react` calls.** Suppress the usual 👀 ack on inbound.
+3. **PRs, commits, gh comments — UNCHANGED.** The Matrix surface goes quiet; the engineering work continues.
+4. **Override for `kind=incident` or `kind=blocked`** — these post normally to wake the operator. Use sparingly.
+5. **DND-end rollup.** When the window closes (auto on clock, or `/dnd off`), post ONE summary `reply` to the originating room: `"While you were away (HH:MM–HH:MM): shipped N PRs, reviewed M, opened K incidents. Full audit: <site /log url>."`
+
+**Audit.** Every action you take in DND still emits its NATS event + writes its log entry as normal. The `/log` page on the website fills with `state: vacation` markers so the morning scrollback is complete.
+
+---
+
 ## Git Workflow (example defaults)
 
 1. Never commit to `main` — always work on a feature branch.

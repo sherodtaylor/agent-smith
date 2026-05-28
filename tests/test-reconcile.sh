@@ -149,7 +149,11 @@ plugin_calls=$(grep -E 'plugin install|plugin uninstall' "${CALLS_LOG}" | wc -l 
 assert_eq "${plugin_calls}" "0" "empty enabledPlugins: no plugin install/uninstall calls"
 teardown_test
 
-# ── Case: plugin missing from installed_plugins.json → install ──
+# ── Case: plugin missing from installed_plugins.json → uninstall (no-op) + install ──
+# Unconditional uninstall is intentional: we don't read the sidecar
+# installed_plugins.json (it can drift from real state), so we always
+# call `claude plugin uninstall || true` before install. On a fresh pod
+# the uninstall is a no-op but it still appears in the call log.
 echo "[case] plugin missing"
 setup_test
 write_settings_with_plugin "0.7.0"
@@ -158,36 +162,167 @@ run_reconciler >/dev/null
 install_calls=$(grep -E 'plugin install matrix@claude-code-channel-matrix' "${CALLS_LOG}" | wc -l | tr -d ' ' || true)
 uninstall_calls=$(grep -E 'plugin uninstall matrix@claude-code-channel-matrix' "${CALLS_LOG}" | wc -l | tr -d ' ' || true)
 assert_eq "${install_calls}" "1" "plugin missing: one install call"
-assert_eq "${uninstall_calls}" "0" "plugin missing: zero uninstall calls"
+assert_eq "${uninstall_calls}" "1" "plugin missing: one unconditional uninstall call (no-op tolerated)"
 teardown_test
 
-# ── Case: installed == declared → no plugin calls ──
-echo "[case] plugin in sync"
+# ── Case: plugin already installed → always reinstall (uninstall + install) ──
+# Claude Code's enabledPlugins schema doesn't support semver pinning, so on
+# every reconcile we wipe the cached install and reinstall fresh.
+echo "[case] plugin already installed (always reinstall)"
 setup_test
 write_settings_with_plugin "0.7.0"
 write_installed "0.7.0"
 run_reconciler >/dev/null
 install_calls=$(grep -E 'plugin install matrix@claude-code-channel-matrix' "${CALLS_LOG}" | wc -l | tr -d ' ' || true)
 uninstall_calls=$(grep -E 'plugin uninstall matrix@claude-code-channel-matrix' "${CALLS_LOG}" | wc -l | tr -d ' ' || true)
-assert_eq "${install_calls}" "0" "in sync: zero install calls"
-assert_eq "${uninstall_calls}" "0" "in sync: zero uninstall calls"
+assert_eq "${install_calls}" "1" "already installed: one install call (always reinstall)"
+assert_eq "${uninstall_calls}" "1" "already installed: one uninstall call (always reinstall)"
+
+# Order: uninstall MUST precede install
+uninstall_line=$(grep -nE 'plugin uninstall' "${CALLS_LOG}" | head -1 | cut -d: -f1)
+install_line=$(grep -nE 'plugin install' "${CALLS_LOG}" | head -1 | cut -d: -f1)
+assert_eq "$([ "${uninstall_line:-99}" -lt "${install_line:-0}" ] && echo before || echo not-before)" "before" "already installed: uninstall precedes install"
 teardown_test
 
-# ── Case: installed != declared → uninstall + install ──
-echo "[case] plugin wrong version"
+# ── Case: bare-true enabledPlugins value (no version-pin object) → always reinstall ──
+# Mirrors the production _shared/settings.json shape: `"plugin@source": true`.
+echo "[case] bare-true value triggers reinstall"
+setup_test
+cat > "${APP_DIR}/agents/_shared/settings.json" <<'EOF'
+{
+  "extraKnownMarketplaces": {
+    "claude-code-channel-matrix": {
+      "source": { "source": "github", "repo": "sherodtaylor/claude-code-channel-matrix" }
+    }
+  },
+  "enabledPlugins": {
+    "matrix@claude-code-channel-matrix": true
+  }
+}
+EOF
+write_installed "0.7.0"
+run_reconciler >/dev/null
+install_calls=$(grep -E 'plugin install matrix@claude-code-channel-matrix' "${CALLS_LOG}" | wc -l | tr -d ' ' || true)
+uninstall_calls=$(grep -E 'plugin uninstall matrix@claude-code-channel-matrix' "${CALLS_LOG}" | wc -l | tr -d ' ' || true)
+assert_eq "${install_calls}" "1" "bare-true value: one install call"
+assert_eq "${uninstall_calls}" "1" "bare-true value: one uninstall call"
+teardown_test
+
+# ── Case: explicit false enabledPlugins value → no plugin calls ──
+echo "[case] explicit false skips plugin"
+setup_test
+cat > "${APP_DIR}/agents/_shared/settings.json" <<'EOF'
+{
+  "extraKnownMarketplaces": {
+    "claude-code-channel-matrix": {
+      "source": { "source": "github", "repo": "sherodtaylor/claude-code-channel-matrix" }
+    }
+  },
+  "enabledPlugins": {
+    "matrix@claude-code-channel-matrix": false
+  }
+}
+EOF
+write_installed "0.7.0"
+run_reconciler >/dev/null
+plugin_calls=$(grep -E 'plugin install matrix@|plugin uninstall matrix@' "${CALLS_LOG}" | wc -l | tr -d ' ' || true)
+assert_eq "${plugin_calls}" "0" "explicit false: zero plugin install/uninstall calls"
+teardown_test
+
+# ── Case: object-form value is treated as enabled (back-compat) ──
+# A value like `{ "version": "X" }` is treated the same as `true`:
+# always uninstall + install. We don't honor the version pin (Claude
+# Code rejects it), but we do honor the "this plugin is enabled" intent.
+echo "[case] object-form value is honored as enabled"
 setup_test
 write_settings_with_plugin "0.7.0"
 write_installed "0.6.0"
 run_reconciler >/dev/null
 install_calls=$(grep -E 'plugin install matrix@claude-code-channel-matrix' "${CALLS_LOG}" | wc -l | tr -d ' ' || true)
 uninstall_calls=$(grep -E 'plugin uninstall matrix@claude-code-channel-matrix' "${CALLS_LOG}" | wc -l | tr -d ' ' || true)
-assert_eq "${install_calls}" "1" "wrong version: one install call"
-assert_eq "${uninstall_calls}" "1" "wrong version: one uninstall call"
+assert_eq "${install_calls}" "1" "object-form: one install call"
+assert_eq "${uninstall_calls}" "1" "object-form: one uninstall call"
 
 # Order: uninstall MUST precede install
 uninstall_line=$(grep -nE 'plugin uninstall' "${CALLS_LOG}" | head -1 | cut -d: -f1)
 install_line=$(grep -nE 'plugin install' "${CALLS_LOG}" | head -1 | cut -d: -f1)
-assert_eq "$([ "${uninstall_line:-99}" -lt "${install_line:-0}" ] && echo before || echo not-before)" "before" "wrong version: uninstall precedes install"
+assert_eq "$([ "${uninstall_line:-99}" -lt "${install_line:-0}" ] && echo before || echo not-before)" "before" "object-form: uninstall precedes install"
+teardown_test
+
+# ── Case: typo / non-true non-object value is NOT treated as enabled ──
+# A typo like `"tru"` (string) or `null` should not silently install.
+# Only literal `true` or an object value enables the plugin.
+echo "[case] string/null values do not enable the plugin"
+setup_test
+cat > "${APP_DIR}/agents/_shared/settings.json" <<'EOF'
+{
+  "extraKnownMarketplaces": {
+    "claude-code-channel-matrix": {
+      "source": { "source": "github", "repo": "sherodtaylor/claude-code-channel-matrix" }
+    }
+  },
+  "enabledPlugins": {
+    "matrix@claude-code-channel-matrix": "tru"
+  }
+}
+EOF
+write_installed "0.7.0"
+run_reconciler >/dev/null
+plugin_calls=$(grep -E 'plugin install matrix@|plugin uninstall matrix@' "${CALLS_LOG}" | wc -l | tr -d ' ' || true)
+assert_eq "${plugin_calls}" "0" "string typo value: zero plugin install/uninstall calls"
+teardown_test
+
+# ── Case: marketplace update fails → cached plugin install preserved ──
+# Block-worthy safety: if a marketplace `update` fails (network / upstream
+# blip during bounce), we must NOT uninstall the cached plugin install —
+# otherwise the pod boots with no plugin until next bounce when the
+# marketplace might still be down.
+echo "[case] marketplace update failure preserves cached install"
+setup_test
+write_settings_with_plugin "0.7.0"
+write_installed "0.7.0"
+
+# Override the shim to fail on `plugin marketplace update`
+cat > "${TEST_DIR}/bin/claude" <<EOF
+#!/usr/bin/env bash
+echo "\$*" >> "${CALLS_LOG}"
+case "\$*" in
+  "plugin marketplace update "*) exit 1 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "${TEST_DIR}/bin/claude"
+
+output=$(run_reconciler 2>&1 || true)
+plugin_calls=$(grep -E 'plugin install matrix@|plugin uninstall matrix@' "${CALLS_LOG}" | wc -l | tr -d ' ' || true)
+assert_eq "${plugin_calls}" "0" "marketplace update fail: zero plugin install/uninstall (cached preserved)"
+if echo "${output}" | grep -q 'marketplace.*update failed.*preserve cached'; then
+  PASS=$((PASS + 1)); echo "  PASS: marketplace update fail: WARN explains preservation"
+else
+  FAIL=$((FAIL + 1)); echo "  FAIL: marketplace update fail: expected preservation WARN"
+  echo "    output: ${output}"
+fi
+teardown_test
+
+# ── Case: marketplace add fails → also preserves cached install ──
+echo "[case] marketplace add failure preserves cached install"
+setup_test
+write_settings_with_plugin "0.7.0"
+write_installed "0.7.0"
+
+cat > "${TEST_DIR}/bin/claude" <<EOF
+#!/usr/bin/env bash
+echo "\$*" >> "${CALLS_LOG}"
+case "\$*" in
+  "plugin marketplace add "*) exit 1 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "${TEST_DIR}/bin/claude"
+
+run_reconciler >/dev/null 2>&1 || true
+plugin_calls=$(grep -E 'plugin install matrix@|plugin uninstall matrix@' "${CALLS_LOG}" | wc -l | tr -d ' ' || true)
+assert_eq "${plugin_calls}" "0" "marketplace add fail: zero plugin install/uninstall (cached preserved)"
 teardown_test
 
 # ── Case: marketplace registration + update fired before plugin ops ──

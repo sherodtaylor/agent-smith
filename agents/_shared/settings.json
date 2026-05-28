@@ -9,8 +9,8 @@
     }
   },
   "enabledPlugins": {
-    "matrix@claude-code-channel-matrix": { "version": "0.7.0" },
-    "superpowers@claude-plugins-official": { "version": "5.1.0" }
+    "matrix@claude-code-channel-matrix": true,
+    "superpowers@claude-plugins-official": true
   },
   "hooks": {
     "UserPromptSubmit": [

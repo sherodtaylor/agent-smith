@@ -102,5 +102,15 @@ assert_eq "$sts_count" "2" "two-agent: exactly 2 StatefulSets emitted"
 assert_contains "$out" 'name: alpha' "two-agent: alpha StatefulSet present"
 assert_contains "$out" 'name: beta'  "two-agent: beta StatefulSet present"
 
+# ── Case: two-agent RBAC fan-out (1 CR, N CRBs, N SAs) ──
+echo "[case] two-agent RBAC"
+out=$(render /tmp/values-two-agents.yaml)
+sa_count=$(echo "$out" | grep -cE '^kind: ServiceAccount' || true)
+cr_count=$(echo "$out" | grep -cE '^kind: ClusterRole$' || true)
+crb_count=$(echo "$out" | grep -cE '^kind: ClusterRoleBinding' || true)
+assert_eq "$sa_count" "2" "RBAC: 2 ServiceAccounts"
+assert_eq "$cr_count" "1" "RBAC: 1 shared ClusterRole"
+assert_eq "$crb_count" "2" "RBAC: 2 ClusterRoleBindings"
+
 echo "[test-chart-render] summary: pass=${PASS} fail=${FAIL}"
 exit $FAIL

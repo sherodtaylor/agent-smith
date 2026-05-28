@@ -161,16 +161,68 @@ assert_eq "${install_calls}" "1" "plugin missing: one install call"
 assert_eq "${uninstall_calls}" "0" "plugin missing: zero uninstall calls"
 teardown_test
 
-# ── Case: installed == declared → no plugin calls ──
-echo "[case] plugin in sync"
+# ── Case: plugin already installed → always reinstall (uninstall + install) ──
+# Claude Code's enabledPlugins schema doesn't support semver pinning, so on
+# every reconcile we wipe the cached install and reinstall fresh.
+echo "[case] plugin already installed (always reinstall)"
 setup_test
 write_settings_with_plugin "0.7.0"
 write_installed "0.7.0"
 run_reconciler >/dev/null
 install_calls=$(grep -E 'plugin install matrix@claude-code-channel-matrix' "${CALLS_LOG}" | wc -l | tr -d ' ' || true)
 uninstall_calls=$(grep -E 'plugin uninstall matrix@claude-code-channel-matrix' "${CALLS_LOG}" | wc -l | tr -d ' ' || true)
-assert_eq "${install_calls}" "0" "in sync: zero install calls"
-assert_eq "${uninstall_calls}" "0" "in sync: zero uninstall calls"
+assert_eq "${install_calls}" "1" "already installed: one install call (always reinstall)"
+assert_eq "${uninstall_calls}" "1" "already installed: one uninstall call (always reinstall)"
+
+# Order: uninstall MUST precede install
+uninstall_line=$(grep -nE 'plugin uninstall' "${CALLS_LOG}" | head -1 | cut -d: -f1)
+install_line=$(grep -nE 'plugin install' "${CALLS_LOG}" | head -1 | cut -d: -f1)
+assert_eq "$([ "${uninstall_line:-99}" -lt "${install_line:-0}" ] && echo before || echo not-before)" "before" "already installed: uninstall precedes install"
+teardown_test
+
+# ── Case: bare-true enabledPlugins value (no version-pin object) → always reinstall ──
+# Mirrors the production _shared/settings.json shape: `"plugin@source": true`.
+echo "[case] bare-true value triggers reinstall"
+setup_test
+cat > "${APP_DIR}/agents/_shared/settings.json" <<'EOF'
+{
+  "extraKnownMarketplaces": {
+    "claude-code-channel-matrix": {
+      "source": { "source": "github", "repo": "sherodtaylor/claude-code-channel-matrix" }
+    }
+  },
+  "enabledPlugins": {
+    "matrix@claude-code-channel-matrix": true
+  }
+}
+EOF
+write_installed "0.7.0"
+run_reconciler >/dev/null
+install_calls=$(grep -E 'plugin install matrix@claude-code-channel-matrix' "${CALLS_LOG}" | wc -l | tr -d ' ' || true)
+uninstall_calls=$(grep -E 'plugin uninstall matrix@claude-code-channel-matrix' "${CALLS_LOG}" | wc -l | tr -d ' ' || true)
+assert_eq "${install_calls}" "1" "bare-true value: one install call"
+assert_eq "${uninstall_calls}" "1" "bare-true value: one uninstall call"
+teardown_test
+
+# ── Case: explicit false enabledPlugins value → no plugin calls ──
+echo "[case] explicit false skips plugin"
+setup_test
+cat > "${APP_DIR}/agents/_shared/settings.json" <<'EOF'
+{
+  "extraKnownMarketplaces": {
+    "claude-code-channel-matrix": {
+      "source": { "source": "github", "repo": "sherodtaylor/claude-code-channel-matrix" }
+    }
+  },
+  "enabledPlugins": {
+    "matrix@claude-code-channel-matrix": false
+  }
+}
+EOF
+write_installed "0.7.0"
+run_reconciler >/dev/null
+plugin_calls=$(grep -E 'plugin install matrix@|plugin uninstall matrix@' "${CALLS_LOG}" | wc -l | tr -d ' ' || true)
+assert_eq "${plugin_calls}" "0" "explicit false: zero plugin install/uninstall calls"
 teardown_test
 
 # ── Case: installed != declared → uninstall + install ──

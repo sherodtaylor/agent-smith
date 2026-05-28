@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
-# reconcile-plugins.sh — converge installed Claude plugins to the declarations
-# in agents/_shared/settings.json (enabledPlugins map).
+# reconcile-plugins.sh — refresh marketplaces and reinstall every enabled
+# Claude plugin on each invocation.
+#
+# Background: Claude Code's settings schema for `enabledPlugins` only
+# accepts `true`/`false` — there is no supported semver pin for
+# GitHub-source plugins. To make pod bounces pick up upstream plugin
+# fixes, we instead uninstall + reinstall every enabled plugin on every
+# startup, so the marketplace serves whatever it has at HEAD.
 #
 # Usage: APP_DIR=/opt/agent-smith CLAUDE_DIR=$HOME/.claude bash reconcile-plugins.sh
 #
@@ -35,81 +41,49 @@ if [ ! -f "${SETTINGS}" ]; then
 fi
 
 # ── Phase 1: marketplaces (registration + refresh) ────────────────────────
-if [ -f "${SETTINGS}" ]; then
-  marketplace_names=$(jq -r '.extraKnownMarketplaces // {} | keys[]' "${SETTINGS}" 2>/dev/null || true)
-  for marketplace_name in ${marketplace_names}; do
-    source_repo=$(jq -r ".extraKnownMarketplaces.\"${marketplace_name}\".source.repo // empty" "${SETTINGS}" 2>/dev/null || true)
-    if [ -z "${source_repo}" ]; then
-      warn "${marketplace_name}: no source.repo in settings.json — skipping"
-      continue
-    fi
+marketplace_names=$(jq -r '.extraKnownMarketplaces // {} | keys[]' "${SETTINGS}" 2>/dev/null || true)
+for marketplace_name in ${marketplace_names}; do
+  source_repo=$(jq -r ".extraKnownMarketplaces.\"${marketplace_name}\".source.repo // empty" "${SETTINGS}" 2>/dev/null || true)
+  if [ -z "${source_repo}" ]; then
+    warn "${marketplace_name}: no source.repo in settings.json — skipping"
+    continue
+  fi
 
-    # Idempotent: `claude plugin marketplace add` no-ops if already registered.
-    if ! claude plugin marketplace add "${source_repo}" 2>&1; then
-      warn "${marketplace_name}: marketplace add failed (continuing)"
-    fi
+  # Idempotent: `claude plugin marketplace add` no-ops if already registered.
+  if ! claude plugin marketplace add "${source_repo}" 2>&1; then
+    warn "${marketplace_name}: marketplace add failed (continuing)"
+  fi
 
-    if ! claude plugin marketplace update "${marketplace_name}" 2>&1; then
-      warn "${marketplace_name}: marketplace update failed (continuing)"
-    fi
-  done
-fi
+  if ! claude plugin marketplace update "${marketplace_name}" 2>&1; then
+    warn "${marketplace_name}: marketplace update failed (continuing)"
+  fi
+done
 
-# ── Phase 2: plugin reconciliation ────────────────────────────────────────
-# reconcile_plugin <plugin_id> <declared_version>
-#
-# declared_version is "" when the enabledPlugins value is plain true (no pin).
-# The real implementation (Task 4) will:
-#   - "" (no pin): install if missing, skip drift check
-#   - non-empty: install if missing; uninstall+reinstall if version drifts
+# ── Phase 2: always-reinstall every enabled plugin ────────────────────────
+# For each entry in enabledPlugins whose value is not explicitly false,
+# uninstall (if present) and reinstall from the marketplace. This guarantees
+# every pod bounce picks up upstream plugin fixes without any version-pin
+# dance in settings.json (which Claude Code does not support anyway).
 reconcile_plugin() {
   local plugin_id="$1"
-  local declared="$2"
 
   local installed
   installed=$(jq -r ".plugins.\"${plugin_id}\"[0].version // \"\"" "${INSTALLED}" 2>/dev/null || true)
 
-  # Plain `true` value in enabledPlugins → declared="" → install-if-missing, skip drift check.
-  if [ -z "${declared}" ]; then
-    if [ -z "${installed}" ]; then
-      log "${plugin_id}: not installed (no version pin) → installing latest"
-      claude plugin install "${plugin_id}" 2>&1 || warn "${plugin_id}: install failed; continuing"
-    else
-      log "${plugin_id}: installed at ${installed} (no version pin, skipping drift check)"
-    fi
-    return 0
+  if [ -n "${installed}" ]; then
+    log "${plugin_id}: uninstalling cached ${installed} for fresh reinstall"
+    claude plugin uninstall "${plugin_id}" 2>&1 || warn "${plugin_id}: uninstall failed; continuing"
   fi
 
-  if [ "${installed}" = "${declared}" ]; then
-    log "${plugin_id}: in sync at ${declared}"
-    return 0
-  fi
-
-  if [ -z "${installed}" ]; then
-    log "${plugin_id}: not installed → installing ${declared}"
-  else
-    log "${plugin_id}: drift ${installed} → ${declared}, reinstalling"
-    claude plugin uninstall "${plugin_id}" 2>&1 || true
-  fi
-
-  if ! claude plugin install "${plugin_id}" 2>&1; then
-    warn "${plugin_id}: install failed; continuing"
-    return 0
-  fi
-
-  local new_installed
-  new_installed=$(jq -r ".plugins.\"${plugin_id}\"[0].version // \"\"" "${INSTALLED}" 2>/dev/null || true)
-  if [ "${new_installed}" != "${declared}" ]; then
-    warn "${plugin_id}: declared ${declared} but marketplace served ${new_installed:-<none>}"
-  fi
+  log "${plugin_id}: installing latest from marketplace"
+  claude plugin install "${plugin_id}" 2>&1 || warn "${plugin_id}: install failed; continuing"
 }
 
-# Iterate declared plugins and call reconcile_plugin for each.
-# For an empty enabledPlugins map, jq emits nothing and the loop runs zero times.
-plugin_ids=$(jq -r '.enabledPlugins | keys[]' "${SETTINGS}" 2>/dev/null || true)
+# Iterate enabledPlugins; include anything whose value isn't explicit false.
+# For an empty map, jq emits nothing and the loop runs zero times.
+plugin_ids=$(jq -r '.enabledPlugins // {} | to_entries | map(select(.value != false)) | .[].key' "${SETTINGS}" 2>/dev/null || true)
 for plugin_id in ${plugin_ids}; do
-  declared=$(jq -r ".enabledPlugins.\"${plugin_id}\" | if type == \"object\" then .version else \"\" end" "${SETTINGS}" 2>/dev/null || true)
-  reconcile_plugin "${plugin_id}" "${declared}"
+  reconcile_plugin "${plugin_id}"
 done
 
 log "complete"

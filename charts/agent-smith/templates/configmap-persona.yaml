@@ -1,0 +1,47 @@
+{{- $root := . -}}
+{{- $agents := fromJsonArray (include "agent-smith.agentList" .) -}}
+{{- range $i, $agent := $agents }}
+{{- /*
+  Only emit a chart-rendered ConfigMap when configMapRef is unset.
+  When configMapRef IS set, the operator is supplying their own
+  ConfigMap by name; the chart just mounts it (handled by
+  agent-smith.personaConfigMapName helper in statefulset.yaml).
+*/ -}}
+{{- if not $agent.configMapRef }}
+{{- if gt $i 0 }}
+---
+{{- end }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: agent-smith-persona-{{ $agent.name }}
+  namespace: {{ $root.Release.Namespace }}
+  labels:
+    {{- include "agent-smith.labels" $root | nindent 4 }}
+    agent-smith.io/agent: {{ $agent.name }}
+data:
+{{- $personaDir := printf "agents/%s" $agent.name }}
+{{- $claudeMdPath := printf "%s/CLAUDE.md" $personaDir }}
+{{- $mcpJsonPath := printf "%s/mcp.json" $personaDir }}
+{{- $claudeMdContent := $root.Files.Get $claudeMdPath }}
+{{- $mcpJsonContent := $root.Files.Get $mcpJsonPath }}
+{{- if $claudeMdContent }}
+  CLAUDE.md: |
+{{ $claudeMdContent | indent 4 }}
+{{- else }}
+  CLAUDE.md: |
+    # {{ $agent.name }}
+    (No persona content bundled for this agent. Set configMapRef to point at
+    an operator-supplied ConfigMap with CLAUDE.md + mcp.json, or land
+    persona files at charts/agent-smith/agents/{{ $agent.name }}/ in the
+    chart source.)
+{{- end }}
+{{- if $mcpJsonContent }}
+  mcp.json: |
+{{ $mcpJsonContent | indent 4 }}
+{{- else }}
+  mcp.json: |
+    { "mcpServers": {} }
+{{- end }}
+{{- end }}
+{{- end }}

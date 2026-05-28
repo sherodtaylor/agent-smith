@@ -427,8 +427,7 @@ and the per-agent files. Highlights worth knowing when you watch the agents work
 - **Secret handling.** Agents are forbidden from echoing, logging, or returning secret
   values in Matrix replies. Generated secrets are written directly to their destination.
 
-For the full set of rules see `agents/_shared/CLAUDE.md`; for per-agent behaviour see
-`agents/infrabot/CLAUDE.md` and `agents/devbot/CLAUDE.md`.
+For the full set of shared rules see `agents/_shared/CLAUDE.md` (template — operators replace via ConfigMap for production). For per-agent persona examples see `charts/agent-smith/agents/example-infrabot/CLAUDE.md` and `charts/agent-smith/agents/example-devbot/CLAUDE.md` — both are bundled with the chart as starter templates; production personas live in operator-supplied ConfigMaps referenced via the `configMapRef` value on each agent entry.
 
 ---
 

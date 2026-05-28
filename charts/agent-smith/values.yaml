@@ -1,60 +1,48 @@
-# Required — selects the persona under agents/<agentName>/ inside the image
-# (e.g. "infrabot" or "devbot"; must match a directory baked into the image)
-agentName: ""
+# agent-smith chart values (v0.2.0+)
+#
+# Declare one entry per agent under `agents`. Each entry is self-contained:
+# name, secret reference, matrix bot identity, repos to clone, plus optional
+# per-agent overrides for image.tag (canary rolls) and configMapRef (persona
+# pinning). All other fields below the array are fleet-wide defaults applied
+# to every agent.
+#
+# Legacy single-agent shape (top-level `agentName: foo` + sibling fields) is
+# still accepted during the v0.2.x/v0.3.x deprecation window; see _helpers.tpl
+# `agent-smith.agentList`.
+
+agents: []
+# Example:
+# agents:
+#   - name: infrabot
+#     existingSecret: infrabot-secrets
+#     # Optional per-agent overrides (default to top-level when unset):
+#     # configMapRef: infrabot-persona-v3   # mount this CM as persona
+#     # image:                              # canary image
+#     #   tag: v0.2.1
+#     matrix:
+#       botUserId: "@infrabot:lab.sherodtaylor.dev"
+#       allowedUsers: "@sherod:lab.sherodtaylor.dev,@devbot:..."
+#     agentRepos: [sherodtaylor/homelab]
+#     primaryRepo: homelab
 
 image:
   repository: ghcr.io/sherodtaylor/agent-smith
-  # tag defaults to Chart.AppVersion when empty; override to track a specific
-  # build (e.g. "v0.1.0", "main", "sha-abc1234")
-  tag: ""
+  tag: ""              # defaults to Chart.AppVersion when empty
   pullPolicy: IfNotPresent
 
-# Repositories the init container clones into /workspace/<basename>
-agentRepos:
-  - sherodtaylor/homelab
-
-# /workspace/<primaryRepo> becomes the agent's working directory at startup
-primaryRepo: homelab
-
-matrix:
-  homeserverUrl: ""    # e.g. "https://matrix.example.com"
-  botUserId: ""        # e.g. "@devbot:example.com"
-  # Comma-separated allowlist of Matrix users the bot will respond to.
-  # Leave empty to default to "@<owner>:..." inside setup.sh.
-  allowedUsers: ""
-
-nats:
-  # e.g. "nats://nats.agent-infra.svc.cluster.local:4222"
-  url: ""
-
-# Secret-handling: the chart does NOT manage the underlying Secret. Point it
-# at one you already have (created manually, by ExternalSecrets, or by sealed-
-# secrets) that contains the runtime env vars. Required keys:
-#
-#   MATRIX_ACCESS_TOKEN   Matrix bot login token
-#   GITHUB_TOKEN          Placeholder proxy token (iron-proxy swaps in real PAT)
-#   IRON_PROXY_CA_CRT     iron-proxy MITM CA, PEM
-existingSecret: ""
-
-# iron-proxy egress credential firewall integration. When enabled, the pod's
-# dnsPolicy is set to None and DNS is pointed at iron-proxy so HTTPS egress is
-# intercepted and real GitHub / Anthropic credentials swapped in at the edge.
-# Disable only if you understand the safety implications — the pod will then
-# need real tokens at rest.
+# iron-proxy egress credential firewall integration. When enabled the pod's
+# dnsPolicy points at iron-proxy so HTTPS egress is intercepted and real
+# tokens are swapped at the edge.
 ironProxy:
   enabled: true
-  # ClusterIP of the iron-proxy service.
   clusterIp: 10.43.100.100
 
 persistence:
-  # /root holds the assembled ~/.claude/ (settings, plugins, credentials, hooks)
   home:
     enabled: true
     size: 10Gi
-    storageClass: ""        # empty = cluster default
+    storageClass: ""
     accessMode: ReadWriteOnce
-  # /workspace/<repo> is where the bot's checkouts live; lose this and the
-  # bot has to re-clone on every restart
   workspace:
     enabled: true
     size: 20Gi
@@ -69,14 +57,9 @@ resources:
     cpu: "2"
     memory: 4Gi
 
-serviceAccount:
-  create: true
-  # Defaults to the release-qualified name when empty
-  name: ""
-
-# Cluster-scoped RBAC for the agent's ServiceAccount. The chart ships
-# read-only defaults that are safe for InfraBot-style observation; for an
-# agent that needs to mutate the cluster, override with a wider rule set.
+# Cluster-scoped RBAC. The chart ships read-only defaults safe for the
+# infrabot-style observation use case; override for agents that need to
+# mutate the cluster.
 rbac:
   create: true
   rules:
@@ -99,38 +82,22 @@ rbac:
       resources: ["gitrepositories", "helmrepositories", "ocirepositories"]
       verbs: ["get", "list", "watch"]
 
-# Standard scheduling knobs
 nodeSelector: {}
 tolerations: []
 affinity: {}
 
-# Optional user-supplied shell command executed at the end of the init
-# container's setup.sh, AFTER iron-proxy CA, ~/.claude/ assembly, git/gh
-# credentials, and repo clones. Best-effort: a non-zero exit logs a warning
-# and the pod continues to start. Idempotency is the command's responsibility.
-#
-# Use for environment customizations the chart doesn't ship — bootstrap
-# dotfiles, install per-user tooling, fetch extra credentials, etc. Example:
-#   setup:
-#     command: "curl -fsSL https://raw.githubusercontent.com/<user>/dotfiles/main/install.sh | bash"
+# Optional user-supplied shell command at the end of the init container's
+# setup.sh (e.g. dotfiles installer). Best-effort; failure logs a warning.
 setup:
   command: ""
 
-# Claude auth self-healing via Playwright + ttyd browser tunnel.
-# When enabled, the chart deploys a Service and Ingress so that when Claude's
-# SSO cookies expire and headless auth fails, the agent exposes a browser
-# terminal at <agentName>-shell.<hostSuffix> and DMs the Matrix owner.
+# Claude auth self-healing tunnel (ttyd-driven browser terminal).
 reauth:
   tunnel:
     enabled: true
-    # Suffix appended to agentName to form the tunnel hostname.
-    # e.g. devbot-shell.lab.sherodtaylor.dev
     hostSuffix: ".lab.sherodtaylor.dev"
-    # TLS secret must exist in the same namespace (wildcard cert).
     tlsSecretName: "lab-wildcard-tls"
 
-# Extra env vars (merged with the chart-managed ones) — useful for per-agent
-# tweaks without forking the chart
 extraEnv: []
 # - name: FOO
 #   value: bar

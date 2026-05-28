@@ -2,8 +2,8 @@ apiVersion: v2
 name: agent-smith
 description: Chat-driven Claude Code engineering teammates for a self-hosted homelab
 type: application
-version: 0.1.0
-appVersion: "0.1.0"
+version: 0.2.0
+appVersion: "0.2.0"
 # Apache-2.0 — full text in ../../LICENSE at the repo root.
 license: Apache-2.0
 home: https://github.com/sherodtaylor/agent-smith

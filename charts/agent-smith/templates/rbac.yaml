@@ -1,25 +1,31 @@
-{{- if and .Values.rbac.create .Values.serviceAccount.create -}}
+{{- if .Values.rbac.create }}
+{{- $root := . -}}
+---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: {{ include "agent-smith.fullname" . }}
+  name: agent-smith-base
   labels:
-    {{- include "agent-smith.labels" . | nindent 4 }}
+    {{- include "agent-smith.labels" $root | nindent 4 }}
 rules:
-{{ toYaml .Values.rbac.rules }}
+{{- toYaml $root.Values.rbac.rules | nindent 0 }}
+{{- $agents := fromJsonArray (include "agent-smith.agentList" $root) -}}
+{{- range $agent := $agents }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: {{ include "agent-smith.fullname" . }}
+  name: agent-smith-{{ $agent.name }}
   labels:
-    {{- include "agent-smith.labels" . | nindent 4 }}
+    {{- include "agent-smith.labels" $root | nindent 4 }}
+    agent-smith.io/agent: {{ $agent.name }}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: {{ include "agent-smith.fullname" . }}
+  name: agent-smith-base
 subjects:
   - kind: ServiceAccount
-    name: {{ include "agent-smith.serviceAccountName" . }}
-    namespace: {{ .Release.Namespace }}
-{{- end -}}
+    name: {{ $agent.name }}
+    namespace: {{ $root.Release.Namespace }}
+{{- end }}
+{{- end }}

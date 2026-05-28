@@ -1,17 +1,25 @@
 {{- if .Values.reauth.tunnel.enabled }}
+{{- $root := . -}}
+{{- $agents := fromJsonArray (include "agent-smith.agentList" .) -}}
+{{- range $agent := $agents }}
+---
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "agent-smith.fullname" . }}-shell
+  name: {{ $agent.name }}-shell
+  namespace: {{ $root.Release.Namespace }}
   labels:
-    {{- include "agent-smith.labels" . | nindent 4 }}
+    {{- include "agent-smith.labels" $root | nindent 4 }}
+    agent-smith.io/agent: {{ $agent.name }}
 spec:
   type: ClusterIP
   selector:
-    {{- include "agent-smith.selectorLabels" . | nindent 4 }}
+    {{- include "agent-smith.selectorLabels" $root | nindent 4 }}
+    agent-smith.io/agent: {{ $agent.name }}
   ports:
     - name: ttyd
       port: 7681
       targetPort: 7681
       protocol: TCP
+{{- end }}
 {{- end }}

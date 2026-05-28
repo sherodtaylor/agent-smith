@@ -41,15 +41,34 @@ fi
 
 mkdir -p "${CLAUDE_DIR}/agents" "${CLAUDE_DIR}/channels/matrix"
 
-# CLAUDE.md = shared base + agent persona
-cat "${APP_DIR}/agents/_shared/CLAUDE.md" "${AGENT_DIR}/CLAUDE.md" \
-  > "${CLAUDE_DIR}/CLAUDE.md"
+# CLAUDE.md = shared base + agent persona.
+# Mounted ConfigMaps are the source of truth in v0.2.0+:
+#   /etc/agent-smith/shared/CLAUDE.md  (one shared CM, chart-mounted)
+#   /etc/agent-smith/persona/CLAUDE.md (per-agent CM, chart-mounted)
+# Legacy fallback: ${APP_DIR}/agents/<name>/CLAUDE.md (baked into image).
+# The mount paths win when present; fallback kicks in only when an
+# older chart version (v0.1.x) deploys without the volume mounts.
+_SHARED_CLAUDE_MD="/etc/agent-smith/shared/CLAUDE.md"
+_PERSONA_CLAUDE_MD="/etc/agent-smith/persona/CLAUDE.md"
+if [ -f "${_SHARED_CLAUDE_MD}" ] && [ -f "${_PERSONA_CLAUDE_MD}" ]; then
+  cat "${_SHARED_CLAUDE_MD}" "${_PERSONA_CLAUDE_MD}" > "${CLAUDE_DIR}/CLAUDE.md"
+  echo "[setup] CLAUDE.md assembled from mounted ConfigMaps"
+else
+  cat "${APP_DIR}/agents/_shared/CLAUDE.md" "${AGENT_DIR}/CLAUDE.md" \
+    > "${CLAUDE_DIR}/CLAUDE.md"
+  echo "[setup] CLAUDE.md assembled from baked-in image files (legacy fallback)"
+fi
 
 # settings.json from the shared base (carries the channel plugin marketplace)
 cp "${APP_DIR}/agents/_shared/settings.json" "${CLAUDE_DIR}/settings.json"
 
 # MCP servers (user scope, applies regardless of cwd)
-cp "${AGENT_DIR}/mcp.json" "${CLAUDE_DIR}/.mcp.json"
+_PERSONA_MCP_JSON="/etc/agent-smith/persona/mcp.json"
+if [ -f "${_PERSONA_MCP_JSON}" ]; then
+  cp "${_PERSONA_MCP_JSON}" "${CLAUDE_DIR}/.mcp.json"
+else
+  cp "${AGENT_DIR}/mcp.json" "${CLAUDE_DIR}/.mcp.json"
+fi
 
 # Subagents
 if [ -d "${AGENT_DIR}/subagents" ]; then

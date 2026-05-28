@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: agent-smith-shared
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "agent-smith.labels" . | nindent 4 }}
+data:
+  CLAUDE.md: |
+{{ .Files.Get "agents/_shared/CLAUDE.md" | indent 4 }}

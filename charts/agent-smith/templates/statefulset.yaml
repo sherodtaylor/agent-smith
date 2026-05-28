@@ -1,143 +1,160 @@
+{{- $root := . -}}
+{{- $agents := fromJsonArray (include "agent-smith.agentList" .) -}}
+{{- range $agent := $agents }}
+---
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: {{ include "agent-smith.fullname" . }}
+  name: {{ $agent.name }}
   labels:
-    {{- include "agent-smith.labels" . | nindent 4 }}
+    {{- include "agent-smith.labels" $root | nindent 4 }}
+    app.kubernetes.io/component: agent
+    agent-smith.io/agent: {{ $agent.name }}
 spec:
-  serviceName: {{ include "agent-smith.fullname" . }}
+  serviceName: {{ $agent.name }}
   replicas: 1
   podManagementPolicy: OrderedReady
   selector:
     matchLabels:
-      {{- include "agent-smith.selectorLabels" . | nindent 6 }}
+      {{- include "agent-smith.selectorLabels" $root | nindent 6 }}
+      agent-smith.io/agent: {{ $agent.name }}
   template:
     metadata:
       labels:
-        {{- include "agent-smith.labels" . | nindent 8 }}
+        {{- include "agent-smith.labels" $root | nindent 8 }}
+        agent-smith.io/agent: {{ $agent.name }}
+      annotations:
+        checksum/persona-{{ $agent.name }}: {{ include (print $root.Template.BasePath "/configmap-persona.yaml") $root | sha256sum }}
+        checksum/shared: {{ include (print $root.Template.BasePath "/configmap-shared.yaml") $root | sha256sum }}
     spec:
-      serviceAccountName: {{ include "agent-smith.serviceAccountName" . }}
-      {{- if .Values.ironProxy.enabled }}
+      serviceAccountName: {{ $agent.name }}
+      {{- if $root.Values.ironProxy.enabled }}
       dnsPolicy: None
       dnsConfig:
         nameservers:
-          - {{ .Values.ironProxy.clusterIp | quote }}
+          - {{ $root.Values.ironProxy.clusterIp | quote }}
         searches:
-          - {{ .Release.Namespace }}.svc.cluster.local
+          - {{ $root.Release.Namespace }}.svc.cluster.local
           - svc.cluster.local
           - cluster.local
       {{- end }}
       initContainers:
         - name: setup
-          image: {{ include "agent-smith.image" . | quote }}
-          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          image: "{{ $root.Values.image.repository }}:{{ include "agent-smith.agentImageTag" (dict "agent" $agent "Values" $root.Values "Chart" $root.Chart) }}"
+          imagePullPolicy: {{ $root.Values.image.pullPolicy }}
           command: ["/opt/agent-smith/scripts/setup.sh"]
           env:
             - name: AGENT_NAME
-              value: {{ .Values.agentName | quote }}
+              value: {{ $agent.name | quote }}
             - name: AGENT_REPOS
-              value: {{ join " " .Values.agentRepos | quote }}
+              value: {{ join " " $agent.agentRepos | quote }}
             - name: PRIMARY_REPO
-              value: {{ .Values.primaryRepo | quote }}
-            - name: MATRIX_HOMESERVER_URL
-              value: {{ .Values.matrix.homeserverUrl | quote }}
+              value: {{ $agent.primaryRepo | quote }}
             - name: MATRIX_BOT_USER_ID
-              value: {{ .Values.matrix.botUserId | quote }}
-            {{- if .Values.matrix.allowedUsers }}
+              value: {{ $agent.matrix.botUserId | quote }}
+            {{- if $agent.matrix.allowedUsers }}
             - name: MATRIX_ALLOWED_USERS
-              value: {{ .Values.matrix.allowedUsers | quote }}
+              value: {{ $agent.matrix.allowedUsers | quote }}
             {{- end }}
-            {{- if .Values.nats.url }}
-            - name: NATS_URL
-              value: {{ .Values.nats.url | quote }}
-            {{- end }}
-            {{- if and .Values.setup .Values.setup.command }}
-            - name: SETUP_COMMAND
-              value: {{ .Values.setup.command | quote }}
-            {{- end }}
-            {{- with .Values.extraEnv }}
+            {{- with $root.Values.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
-          {{- if .Values.existingSecret }}
+            {{- if and $root.Values.setup $root.Values.setup.command }}
+            - name: SETUP_COMMAND
+              value: {{ $root.Values.setup.command | quote }}
+            {{- end }}
           envFrom:
             - secretRef:
-                name: {{ .Values.existingSecret }}
-          {{- end }}
+                name: {{ $agent.existingSecret }}
           volumeMounts:
             - name: home
               mountPath: /root
             - name: workspace
               mountPath: /workspace
+            - name: persona
+              mountPath: /etc/agent-smith/persona
+              readOnly: true
+            - name: shared
+              mountPath: /etc/agent-smith/shared
+              readOnly: true
       containers:
         - name: agent
-          image: {{ include "agent-smith.image" . | quote }}
-          imagePullPolicy: {{ .Values.image.pullPolicy }}
-          # tmux needs a TTY; the entrypoint backgrounds it but pane-attach via
-          # `kubectl exec -it ... -- tmux attach -t main` expects one.
+          image: "{{ $root.Values.image.repository }}:{{ include "agent-smith.agentImageTag" (dict "agent" $agent "Values" $root.Values "Chart" $root.Chart) }}"
+          imagePullPolicy: {{ $root.Values.image.pullPolicy }}
           tty: true
           stdin: true
           env:
             - name: AGENT_NAME
-              value: {{ .Values.agentName | quote }}
+              value: {{ $agent.name | quote }}
             - name: PRIMARY_REPO
-              value: {{ .Values.primaryRepo | quote }}
-            {{- if .Values.nats.url }}
-            - name: NATS_URL
-              value: {{ .Values.nats.url | quote }}
-            {{- end }}
-            {{- if .Values.reauth.tunnel.enabled }}
+              value: {{ $agent.primaryRepo | quote }}
+            {{- if $root.Values.reauth.tunnel.enabled }}
             - name: REAUTH_TUNNEL_HOST
-              value: {{ printf "%s-shell%s" .Values.agentName .Values.reauth.tunnel.hostSuffix | quote }}
+              value: {{ printf "%s-shell%s" $agent.name $root.Values.reauth.tunnel.hostSuffix | quote }}
             {{- end }}
-            {{- with .Values.extraEnv }}
+            {{- with $root.Values.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
-          {{- if .Values.existingSecret }}
           envFrom:
             - secretRef:
-                name: {{ .Values.existingSecret }}
-          {{- end }}
+                name: {{ $agent.existingSecret }}
           volumeMounts:
             - name: home
               mountPath: /root
             - name: workspace
               mountPath: /workspace
+            - name: persona
+              mountPath: /etc/agent-smith/persona
+              readOnly: true
+            - name: shared
+              mountPath: /etc/agent-smith/shared
+              readOnly: true
           resources:
-            {{- toYaml .Values.resources | nindent 12 }}
-      {{- with .Values.nodeSelector }}
+            {{- toYaml $root.Values.resources | nindent 12 }}
+      volumes:
+        - name: persona
+          configMap:
+            name: {{ include "agent-smith.personaConfigMapName" $agent }}
+            optional: true
+        - name: shared
+          configMap:
+            name: agent-smith-shared
+            optional: true
+      {{- with $root.Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- with .Values.tolerations }}
+      {{- with $root.Values.tolerations }}
       tolerations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- with .Values.affinity }}
+      {{- with $root.Values.affinity }}
       affinity:
         {{- toYaml . | nindent 8 }}
       {{- end }}
   volumeClaimTemplates:
-    {{- if .Values.persistence.home.enabled }}
+    {{- if $root.Values.persistence.home.enabled }}
     - metadata:
         name: home
       spec:
-        accessModes: [{{ .Values.persistence.home.accessMode | quote }}]
-        {{- with .Values.persistence.home.storageClass }}
+        accessModes: [{{ $root.Values.persistence.home.accessMode | quote }}]
+        {{- with $root.Values.persistence.home.storageClass }}
         storageClassName: {{ . | quote }}
         {{- end }}
         resources:
           requests:
-            storage: {{ .Values.persistence.home.size | quote }}
+            storage: {{ $root.Values.persistence.home.size | quote }}
     {{- end }}
-    {{- if .Values.persistence.workspace.enabled }}
+    {{- if $root.Values.persistence.workspace.enabled }}
     - metadata:
         name: workspace
       spec:
-        accessModes: [{{ .Values.persistence.workspace.accessMode | quote }}]
-        {{- with .Values.persistence.workspace.storageClass }}
+        accessModes: [{{ $root.Values.persistence.workspace.accessMode | quote }}]
+        {{- with $root.Values.persistence.workspace.storageClass }}
         storageClassName: {{ . | quote }}
         {{- end }}
         resources:
           requests:
-            storage: {{ .Values.persistence.workspace.size | quote }}
+            storage: {{ $root.Values.persistence.workspace.size | quote }}
     {{- end }}
+{{- end }}

@@ -1,25 +1,33 @@
 {{- if .Values.reauth.tunnel.enabled }}
+{{- $root := . -}}
+{{- $agents := fromJsonArray (include "agent-smith.agentList" .) -}}
+{{- range $agent := $agents }}
+---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: {{ include "agent-smith.fullname" . }}-shell
+  name: {{ $agent.name }}-shell
+  namespace: {{ $root.Release.Namespace }}
   labels:
-    {{- include "agent-smith.labels" . | nindent 4 }}
+    {{- include "agent-smith.labels" $root | nindent 4 }}
+    agent-smith.io/agent: {{ $agent.name }}
+  annotations:
+    kubernetes.io/ingress.class: traefik
 spec:
-  ingressClassName: traefik
+  tls:
+    - hosts:
+        - {{ printf "%s-shell%s" $agent.name $root.Values.reauth.tunnel.hostSuffix }}
+      secretName: {{ $root.Values.reauth.tunnel.tlsSecretName }}
   rules:
-    - host: {{ .Values.agentName }}-shell{{ .Values.reauth.tunnel.hostSuffix }}
+    - host: {{ printf "%s-shell%s" $agent.name $root.Values.reauth.tunnel.hostSuffix }}
       http:
         paths:
           - path: /
             pathType: Prefix
             backend:
               service:
-                name: {{ include "agent-smith.fullname" . }}-shell
+                name: {{ $agent.name }}-shell
                 port:
                   number: 7681
-  tls:
-    - hosts:
-        - {{ .Values.agentName }}-shell{{ .Values.reauth.tunnel.hostSuffix }}
-      secretName: {{ .Values.reauth.tunnel.tlsSecretName }}
+{{- end }}
 {{- end }}

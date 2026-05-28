@@ -261,20 +261,48 @@ So a downstream consumer that pins `:latest` only ever gets versioned
 releases, never a mid-flight refactor. Detail:
 [`docs/runbooks/release.md`](runbooks/release.md).
 
-## Helm chart shape
+## Helm chart shape (v0.2.0+)
 
-One chart = one agent. The chart renders:
+One Helm release of `agent-smith` deploys N agents from a values-side
+`agents: [...]` array. Chart templates fan out per agent:
 
-- `ServiceAccount` (optional)
-- `ClusterRole` + `ClusterRoleBinding` (read-only defaults; overridable for
-  mutating agents)
-- `StatefulSet` with two PVCs (`/root` for `~/.claude/`, `/workspace/` for
-  cloned repos)
-- Optional iron-proxy DNS routing (`dnsPolicy: None`, nameserver at
-  `ironProxy.clusterIp`)
+- `StatefulSet/<agent-name>` (one replica, two PVCs: `home-<agent>-0` +
+  `workspace-<agent>-0`)
+- `ServiceAccount/<agent-name>`
+- `ClusterRoleBinding/agent-smith-<agent-name>` → shared
+  `ClusterRole/agent-smith-base`
+- `ConfigMap/agent-smith-persona-<agent-name>` (chart-rendered from
+  bundled `charts/agent-smith/agents/<name>/` files; skipped when
+  `configMapRef` overrides)
+- `Service/<agent-name>-shell` + `Ingress/<agent-name>-shell` (when
+  `reauth.tunnel.enabled`)
+- Optional iron-proxy DNS routing per pod (`dnsPolicy: None`, nameserver
+  at `ironProxy.clusterIp`)
 
-The chart **does not** manage the underlying `Secret`. The consumer provides
-one (manually, ExternalSecrets, sealed-secrets) with these keys:
+One-instance resources (not per-agent):
+
+- `ConfigMap/agent-smith-shared` — contains `_shared/CLAUDE.md`
+  cross-cutting content; mounted at `/etc/agent-smith/shared/` in every
+  agent's init container, concatenated with the per-agent persona by
+  `setup.sh`
+- `ClusterRole/agent-smith-base` — one role; N per-agent bindings
+
+Per-agent staging knobs (default to fleet-wide value when omitted):
+
+- `agents[i].image.tag` — overrides fleet-wide `image.tag` for canary
+  rolls. Drop the override after promotion.
+- `agents[i].configMapRef` — points at an operator-supplied persona
+  ConfigMap instead of the chart-rendered default. Use for A/B testing
+  personas or staged content rollouts.
+
+Backward-compat: top-level single-agent shape (`agentName: foo` +
+sibling fields) accepted during `v0.2.x`/`v0.3.x` via a synthetic
+one-element array (`agent-smith.agentList` helper). Removed in
+`v0.4.0`.
+
+The chart **does not** manage the underlying `Secret`. The consumer
+provides one per agent (manually, ExternalSecrets, sealed-secrets)
+with these keys:
 
 | Key | Used by |
 |---|---|

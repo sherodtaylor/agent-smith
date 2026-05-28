@@ -19,6 +19,61 @@ cut-a-release procedure.
 
 ## [Unreleased]
 
+### Added
+
+- **Chart `agents: [...]` array shape** — one HelmRelease can now
+  deploy N agents from a values-side array. Replaces the prior
+  one-HelmRelease-per-agent model.
+- **Per-agent persona via mounted ConfigMaps** — `CLAUDE.md` + `mcp.json`
+  no longer need to be baked into the image. Hybrid sourcing: chart
+  renders a default ConfigMap from `charts/agent-smith/agents/<name>/`
+  bundled content; agents set `configMapRef: <name>` to override with
+  an operator-supplied ConfigMap. Persona iteration drops from ~5-10min
+  (image rebuild) to ~90s (ConfigMap edit + pod restart).
+- **Per-agent staging knobs** — each agent entry accepts an optional
+  `image.tag` (defaults to fleet-wide `.image.tag`) and `configMapRef`
+  (defaults to chart-rendered persona CM). Canary one agent without
+  splitting the fleet across HelmReleases.
+- **Shared `agent-smith-shared` ConfigMap** — one instance regardless
+  of agent count; carries cross-cutting `_shared/CLAUDE.md` content
+  that `setup.sh` concatenates with the per-agent persona.
+- **`tests/test-chart-render.sh`** — bash + helm + grep smoke harness
+  covering 11 cases (29 assertions): single-agent, two-agent fan-out,
+  RBAC fan-out, reauth on/off, persona CM rendering, configMapRef
+  override, checksum annotations, legacy shim, both-set error,
+  empty error, image.tag override + fallback.
+
+### Changed
+
+- **`charts/agent-smith/values.yaml`** — top-level `agentName`,
+  `existingSecret`, `matrix`, `agentRepos`, `primaryRepo`,
+  `serviceAccount` removed. Per-agent equivalents move into
+  `agents[].*`. Top-level still has `image`, `persistence`,
+  `resources`, `ironProxy`, `rbac`, `setup`, `reauth`, `extraEnv`,
+  scheduling knobs.
+- **`scripts/setup.sh`** — reads `CLAUDE.md` + `mcp.json` from
+  `/etc/agent-smith/{shared,persona}/` mount paths when present;
+  falls back to baked-in `/opt/agent-smith/agents/<name>/` paths
+  when the volumes aren't mounted (older chart versions).
+- **Chart version** — `0.2.0` (minor; the deprecation shim keeps
+  legacy `agentName:` consumers working).
+
+### Deprecated
+
+- **Top-level single-agent shape** (`agentName: foo` + sibling fields).
+  The chart accepts it during `v0.2.x` and `v0.3.x` via a synthetic
+  one-element array constructed by `agent-smith.agentList`. Removed
+  in `v0.4.0`. Migrate to `agents: [{name: foo, ...}]`.
+
+### Migration
+
+- Homelab consumer-side migration in a follow-up PR. Two-phase rollout
+  preserves PVC identity (StatefulSet `metadata.name` stays
+  `<agent-name>` — no release-name prefix), so existing
+  `home-<agent>-0` + `workspace-<agent>-0` PVCs transfer
+  transparently between the per-HR-per-agent shape and the new
+  fleet HelmRelease.
+
 ---
 
 ## [0.1.24] - 2026-05-28

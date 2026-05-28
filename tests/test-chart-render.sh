@@ -112,5 +112,33 @@ assert_eq "$sa_count" "2" "RBAC: 2 ServiceAccounts"
 assert_eq "$cr_count" "1" "RBAC: 1 shared ClusterRole"
 assert_eq "$crb_count" "2" "RBAC: 2 ClusterRoleBindings"
 
+# ── Case: reauth tunnel enabled → per-agent Service + Ingress ──
+echo "[case] reauth tunnel fan-out"
+out=$(render /tmp/values-two-agents.yaml)
+svc_count=$(echo "$out" | grep -cE '^kind: Service$' || true)
+ing_count=$(echo "$out" | grep -cE '^kind: Ingress$' || true)
+assert_eq "$svc_count" "2" "reauth: 2 Services"
+assert_eq "$ing_count" "2" "reauth: 2 Ingresses"
+assert_contains "$out" 'alpha-shell' "reauth: alpha hostname"
+assert_contains "$out" 'beta-shell'  "reauth: beta hostname"
+
+# ── Case: reauth disabled → no Service/Ingress ──
+echo "[case] reauth tunnel disabled"
+cat > /tmp/values-reauth-off.yaml <<'EOF'
+image: { repository: ghcr.io/sherodtaylor/agent-smith, tag: v0.2.0 }
+reauth: { tunnel: { enabled: false } }
+agents:
+  - name: alpha
+    existingSecret: alpha-secrets
+    matrix: { botUserId: "@alpha:example.com" }
+    agentRepos: [example/repo]
+    primaryRepo: repo
+EOF
+out=$(render /tmp/values-reauth-off.yaml)
+svc_count=$(echo "$out" | grep -cE '^kind: Service$' || true)
+ing_count=$(echo "$out" | grep -cE '^kind: Ingress$' || true)
+assert_eq "$svc_count" "0" "reauth off: no Services"
+assert_eq "$ing_count" "0" "reauth off: no Ingresses"
+
 echo "[test-chart-render] summary: pass=${PASS} fail=${FAIL}"
 exit $FAIL

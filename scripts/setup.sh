@@ -4,12 +4,17 @@ set -euo pipefail
 AGENT_NAME="${AGENT_NAME:?AGENT_NAME must be set}"
 APP_DIR="/opt/agent-smith"
 AGENT_DIR="${APP_DIR}/agents/${AGENT_NAME}"
+PERSONA_DIR="/etc/agent-smith/persona"
 CLAUDE_DIR="${HOME}/.claude"
 
 echo "[setup] agent=${AGENT_NAME}"
 
-if [ ! -d "$AGENT_DIR" ]; then
-  echo "[setup] FATAL: no AgentConfig at ${AGENT_DIR}" >&2
+# AgentConfig comes from one of two sources:
+#   1. Chart v0.2.0+: per-agent ConfigMap mounted at ${PERSONA_DIR} (preferred)
+#   2. Chart v0.1.x:  baked into the image at ${AGENT_DIR} (legacy)
+# Fail only when neither is present.
+if [ ! -f "${PERSONA_DIR}/CLAUDE.md" ] && [ ! -d "$AGENT_DIR" ]; then
+  echo "[setup] FATAL: no AgentConfig — neither ${PERSONA_DIR}/CLAUDE.md nor ${AGENT_DIR}" >&2
   exit 1
 fi
 
@@ -63,10 +68,10 @@ fi
 cp "${APP_DIR}/agents/_shared/settings.json" "${CLAUDE_DIR}/settings.json"
 
 # MCP servers (user scope, applies regardless of cwd)
-_PERSONA_MCP_JSON="/etc/agent-smith/persona/mcp.json"
+_PERSONA_MCP_JSON="${PERSONA_DIR}/mcp.json"
 if [ -f "${_PERSONA_MCP_JSON}" ]; then
   cp "${_PERSONA_MCP_JSON}" "${CLAUDE_DIR}/.mcp.json"
-else
+elif [ -f "${AGENT_DIR}/mcp.json" ]; then
   cp "${AGENT_DIR}/mcp.json" "${CLAUDE_DIR}/.mcp.json"
 fi
 

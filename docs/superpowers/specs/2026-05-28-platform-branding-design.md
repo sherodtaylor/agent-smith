@@ -99,6 +99,7 @@ Words to use, words to avoid.
 | **Egress credential boundary** | "secret management", "vault" | Specific + technical; ties to iron-proxy |
 | **Persona** | "config", "definition" | Persona names what an agent IS |
 | **Reference deployment** | "deployment", "install" (when describing K8s) | Demotes K8s from product to demo |
+| **Quiet hours** / **DND** / **on vacation** | "muted", "disabled", "off" | State language for §11 — describes a working agent intentionally not push-notifying, not a broken one |
 | `kubectl exec` / cluster commands | leading copy | Belongs in `/docs`, never in hero or first paragraph |
 
 Tone rules (carry over from the existing voice section):
@@ -114,11 +115,11 @@ Tone rules (carry over from the existing voice section):
 The README is canonical for tagline/sub; website mirrors verbatim per
 the existing sync convention.
 
-### 5.1 Tagline (1 line, oversized display)
+### 5.1 Tagline (1 line, oversized display) — LOCKED
 
-> **A sandbox workforce — autonomous engineering agents as force multipliers.**
+> **Your secure sandboxed agent workforce — ship in your sleep.**
 
-(Open-question alternatives in §10 if Sherod prefers shorter.)
+(Locked 2026-05-28. The earlier draft was descriptive; this one is a hook. "Secure" adds the trust frame; "ship in your sleep" is the imperative payoff.)
 
 ### 5.2 Hero sub (2 sentences)
 
@@ -212,11 +213,39 @@ Site:
 - `/log` log feed — tiny `16×16` next to the agent column
 
 README:
-- One row of sprites under the tagline (raster fallback to a PNG
-  if rendered in GitHub's README — GitHub strips `<svg>` inline,
-  must be a file reference). Generated PNGs at 64×64 +
-  Retina @2x committed to `website/public/sprites/` and
-  embedded with `![DevBot](sprites/devbot.png)`.
+- One row of sprites under the tagline, referenced as external SVG
+  files via `<img src="https://raw.githubusercontent.com/sherodtaylor/agent-smith/main/website/public/sprites/devbot.svg" width="64"/>`. (GitHub renders external SVGs as raster, so file references work; per the open-question lock 2026-05-28.) SVG files live at `website/public/sprites/{devbot,infrabot}.svg`.
+
+### 7.4 Vacation / DND state variant
+
+Per Sherod (2026-05-28): "consider a vacation icon." When an agent is
+in quiet hours / DND mode (§11), the sprite renders in a "vacation"
+variant — the *same* base sprite plus a state overlay so the operator
+can read the state at a glance from any surface the sprite appears
+on.
+
+State overlays (small, palette-token-driven):
+
+| State | Overlay | Color |
+|---|---|---|
+| Active (default) | none | sprite's own accent |
+| Vacation / quiet hours | `Zzz` glyph at top-right of the 16×16 frame OR a small sunglasses overlay across the eye row | `--accent-warn` (amber) |
+| Error / blocked | small `!` glyph at top-right | `--accent-err` (rust) |
+
+Authoring: one SVG per agent per state (`SpriteDevbot.astro` accepts a
+`state="active|vacation|error"` prop and switches the inline SVG
+fragment). Three states × two agents = six small SVG fragments, still
+inside the ≤8 KB sprite budget.
+
+On surfaces the sprite already appears in (§7.3), the variant is
+selected by the agent's current status: the build-time
+`crew-status.json` carries a `state` field per agent, the components
+read it and pass to the sprite. Vacation badge ALSO appears in:
+
+- `/log` log feed — small vacation marker next to entries authored
+  while the agent was in DND (so the audit trail reflects state)
+- Hero status strip — appends `· devbot 💤` when devbot is in
+  quiet hours; the 💤 (or amber Zzz) is the live state indicator
 
 ---
 
@@ -251,23 +280,86 @@ remains: README moves → small sync PR updates the rest.
 
 ---
 
-## 10. Open questions
+## 10. Open questions — RESOLVED (2026-05-28)
 
-1. **Tagline length.** §5.1 is 56 chars. Sherod may prefer shorter
-   ("Autonomous engineering, in a sandbox." 38 chars / "An autonomous
-   engineering workforce." 38 chars / "Engineers, not chatbots." 24
-   chars). Pick one.
-2. **Hero sub — keep the K8s sentence?** §5.2 ends with "the
-   reference deployment is one Kubernetes StatefulSet per agent."
-   Sherod's "Kubernetes scares people" framing might prefer dropping
-   the K8s mention entirely from hero (push it down to §6.5). Worth a
-   call.
-3. **Sprite personality directions** (§7.2) — DevBot=cap+wrench /
-   InfraBot=hard-hat is one read. Open to other directions (e.g.,
-   robot/android, tarot-card characters, retro Apple //e operator,
-   etc.).
-4. **README sprite rendering** — PNG fallback (committed binaries) or
-   SVG `<img src=".../devbot.svg">` (GitHub renders external SVGs as
-   raster anyway)? Either works; PNG is more predictable.
-5. **GitHub social card** — should the implementation include generating
-   the 1280×640 PNG, or leave that as a follow-up?
+| # | Question | Decision |
+|---|---|---|
+| 1 | Tagline | **`Your secure sandboxed agent workforce — ship in your sleep.`** (§5.1) |
+| 2 | K8s in hero sub | **Push down** — hero copy stays framework-only; K8s lives in §6.5 (renamed "Under the hood — reference deployment") |
+| 3 | Sprite personality | **Fun + theme-driven** — see §7.2 (rewrite) |
+| 4 | README sprite | **External SVG `<img src=…>`** referenced from `website/public/sprites/{devbot,infrabot}.svg` |
+| 5 | GitHub social card | **Include in v1** — generated 1280×640 PNG from the website's hero, committed under `website/public/og-image.png` and wired via `<meta property="og:image">` in `BaseLayout.astro` |
+
+---
+
+## 11. Quiet hours / DND / vacation — feature
+
+Per Sherod (2026-05-28): "scope in DND or ringer off." A bot that
+ships in your sleep should know when you're asleep. This section
+specifies a quiet-hours mode that mutes push-notifying replies during
+a configurable window while keeping the agent productive.
+
+### 11.1 Behavior
+
+Two layers of control:
+
+- **Per-agent config (`quietHours`)** — a window in the agent's
+  values.yaml entry, e.g. `quietHours: "22:00-08:00"` (operator's local
+  tz, settable via `quietHoursTz`). Default: unset = always on.
+- **Operator command (`/dnd`)** — a Matrix command from the operator
+  that overrides per-agent config for a one-shot window:
+  - `/dnd on` — enable DND indefinitely
+  - `/dnd on until 08:00` — DND until 08:00
+  - `/dnd off` — restore default
+
+Both layers compose with the same semantics: when in DND, the agent
+**continues working** but:
+
+1. **No new `reply` calls** to the originating room. Status updates
+   become `edit_message` to a pinned "DND status" message — edits do
+   NOT trigger push notifications (per the matrix-channel spec
+   `docs/superpowers/specs/2026-05-27-matrix-channel-threading-tools-design.md` §2.2).
+2. **`react` is suppressed** (no 👀 ack on inbound — silent receipt).
+3. **The audit log fills normally** (`/log` page still gets entries
+   timestamped with `state: vacation` so the operator can scrollback
+   in the morning).
+4. **Outbound PRs, commits, gh comments** are NOT suppressed — only
+   the Matrix surface goes quiet. The crew still ships.
+
+Critical messages (anything tagged `kind=incident` or `kind=blocked`)
+override DND and post normally; otherwise an incident at 03:00
+silently rotting in audit log is the wrong default.
+
+### 11.2 Brand surface
+
+- The sprite renders in **vacation variant** (§7.4) on all surfaces
+  for the duration of DND.
+- Hero status strip shows the live state: `· devbot 💤 until 08:00`
+  appended to the chrome.
+- `/log` entries authored in DND get a small `💤` glyph next to the
+  agent column so the audit-trail reads "this happened while devbot
+  was on vacation."
+
+### 11.3 Channel-plugin dependency
+
+The "edits don't push" guarantee comes from
+`zekker6/claude-code-channel-matrix` having an `edit_message` tool
+that emits a `m.replace` event. That tool is being added in the
+matrix-channel-fork spec (PR #46). **DND ships AFTER the fork's
+`edit_message` lands upstream** (or as our pinned fork) — otherwise
+"DND" just means "no reply" which leaves the operator with no status
+visibility at all.
+
+If matrix-channel work hasn't landed by the time the rest of this
+branding spec ships, the visual surface (sprite vacation variant,
+hero chrome) ships standalone; the behavioural mute is gated until
+`edit_message` is available.
+
+### 11.4 Out of scope
+
+- Per-channel DND (e.g. DND on Discord but not Matrix) — single
+  operator, single notification preference.
+- Calendar integration (read Google Calendar busy/free for DND
+  windows). Future.
+- Group DND (mute all agents at once via a swarm-level command).
+  Future; for now, `/dnd` is per-agent.

@@ -124,3 +124,73 @@ starts fresh.
 - The git log is your memory for code changes.
 - `kubectl describe` and `flux logs` are your memory for cluster state.
 - Channel room history is your memory for team actions.
+
+---
+
+## Working with pmbot
+
+If your team includes a product-manager agent (`pmbot` or similar), it
+owns the PRDs, roadmap, and vision for the products the team works on.
+pmbot lives at `docs/product/<product>/{vision,roadmap,prds/}` in the
+operator's GitOps repo.
+
+### Who owns what
+
+| Concern | Owner |
+|---|---|
+| What we're building and why (PRDs, roadmap, vision) | pmbot |
+| How we build it (technical spec, plan, code) | you (implementation agent) |
+| Final adjudication of disagreements | the operator |
+
+### When to summon pmbot
+
+- A request lands with unclear scope or no acceptance criteria → ping
+  pmbot in the originating room to interview the operator and produce
+  a PRD.
+- Mid-implementation you discover scope wasn't fully specified →
+  pause, ping pmbot, don't expand scope unilaterally.
+- Two equally valid paths exist and the choice is about product, not
+  code → ask pmbot, not the operator directly (pmbot keeps the
+  conversation grounded in the PRD).
+
+### When NOT to summon pmbot
+
+- You're choosing between two implementation approaches that both
+  satisfy the PRD. Pmbot's answer is "you pick." Make the call.
+- You need cluster state or code context. Read the cluster / repo.
+- You're inside a single well-specified task. Finish it.
+
+### Mandatory response rule
+
+When pmbot leaves a finding on a PR you opened or a message in `#dev` /
+`#infra` directed at you, **you must respond before the next merge or
+escalation point.** Three valid responses:
+
+1. **Push a fix commit** that addresses the finding.
+2. **Reply with a written rationale** explaining why the finding does
+   not apply (one paragraph, specific).
+3. **Escalate to the operator** with a `@`-mention if you and pmbot
+   disagree on the merits.
+
+**Silent ignore is not allowed.** Pmbot's authority is the team's
+agreement that alignment matters; you uphold that agreement by
+responding.
+
+If pmbot has not responded to *your* `@`-mention in a reasonable time
+(e.g. the operator is asleep and pmbot is waiting on an interview), do
+not block — proceed with your best read of the PRD and note the
+assumption in your PR. Pmbot can correct after the fact.
+
+### Mention forms
+
+Recognize pmbot by:
+- Plain text: `pmbot`, `@pmbot`, `PMBot`
+- Matrix display-name link: `[pmbot 💕](https://matrix.to/#/@pmbot:lab.sherodtaylor.dev)`
+- Full Matrix ID: `@pmbot:lab.sherodtaylor.dev`
+
+### Cross-agent PR review (extension)
+
+The existing cross-agent PR review rule (review every teammate's PR,
+post a one-liner with findings) already includes pmbot. When pmbot
+opens a PRD PR, you may review the PRD for clarity but stay out of
+implementation suggestions — those are out of pmbot's lane.

@@ -1,0 +1,4 @@
+{
+  "_comment": "Example MCP server config for a product-manager agent. Replace via configMapRef for production. Matrix channel plugin + git/gh are auto-provided by the chart; this file is for any additional MCP servers.",
+  "mcpServers": {}
+}

@@ -27,6 +27,11 @@ if [ -n "${IRON_PROXY_CA_CRT:-}" ]; then
   echo "[setup] installed iron-proxy CA"
 fi
 
+# Ensure ~/.claude exists before any reads or writes into it.
+# On a brand-new home PVC the directory doesn't exist yet; mkdir -p is
+# idempotent on subsequent restarts.
+mkdir -p "${CLAUDE_DIR}"
+
 # Write OAuth credentials only if the PVC doesn't already have real (non-stub)
 # tokens. Real credentials persist across pod restarts via the home PVC and are
 # managed by claude-reauth.py + Claude Code's own refresh cycle. Overwriting them

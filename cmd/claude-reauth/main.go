@@ -204,7 +204,7 @@ func humanFallback(loginCmd *exec.Cmd) error {
 	agentName := env("AGENT_NAME", "agent")
 	tunnelHost := os.Getenv("REAUTH_TUNNEL_HOST")
 
-	ttydArgs := []string{"-p", ttydPort, "-t", "fontSize=16", "claude", "auth", "login", "--claudeai"}
+	ttydArgs := []string{"-p", ttydPort, "--writable", "-t", "fontSize=16", "claude", "auth", "login", "--claudeai"}
 	if email := os.Getenv("REAUTH_EMAIL"); email != "" {
 		ttydArgs = append(ttydArgs, "--email", email)
 	}

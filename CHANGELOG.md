@@ -21,6 +21,19 @@ cut-a-release procedure.
 
 ---
 
+## [0.2.10] - 2026-05-31
+
+### Fixed
+
+- **`claude-loop.sh` stub detection** — `claude auth status` returns exit 0
+  for well-formed stub credentials, so `_ensure_auth` never called
+  `claude-reauth` on new pods. Now checks `accessToken` directly; if it equals
+  `"access-token-stub"` it triggers `claude-reauth` immediately, so bots
+  bootstrapped without real tokens on their PVC authenticate automatically
+  instead of hitting the iron-proxy shared-token swap path.
+
+---
+
 ## [0.2.9] - 2026-05-30
 
 ### Added

@@ -306,7 +306,7 @@ func main() {
 	agentName := env("AGENT_NAME", "agent")
 	fmt.Printf("[reauth] starting (agent=%s)\n", agentName)
 
-	if isLoggedIn() {
+	if isLoggedIn() && credsAreReal() {
 		fmt.Println("[reauth] already authenticated — nothing to do")
 		os.Exit(0)
 	}

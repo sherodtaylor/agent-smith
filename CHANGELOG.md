@@ -21,6 +21,19 @@ cut-a-release procedure.
 
 ---
 
+## [0.2.11] - 2026-05-31
+
+### Fixed
+
+- **`claude-reauth` stub credential gate** — `claude auth status` (used by
+  `isLoggedIn()`) exits 0 for well-formed stub credentials, so the binary
+  would exit early with "already authenticated" even on a fresh pod. Now
+  requires both `isLoggedIn()` and `credsAreReal()` before skipping reauth.
+  `credsAreReal()` already existed and checked for stub tokens but was only
+  used in the human-fallback polling loop.
+
+---
+
 ## [0.2.10] - 2026-05-31
 
 ### Fixed

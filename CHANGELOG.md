@@ -21,6 +21,16 @@ cut-a-release procedure.
 
 ---
 
+## [0.2.12] - 2026-05-31
+
+### Fixed
+
+- **`claude-reauth` ttyd readonly mode** — ttyd was started without `--writable`,
+  making the browser terminal read-only and preventing the user from pasting
+  the OAuth code to complete `claude auth login`.
+
+---
+
 ## [0.2.11] - 2026-05-31
 
 ### Fixed

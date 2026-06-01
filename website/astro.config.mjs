@@ -3,9 +3,15 @@ import starlight from '@astrojs/starlight';
 import mdx from '@astrojs/mdx';
 import sitemap from '@astrojs/sitemap';
 
+// PR_PREVIEW_BASE is set by .github/workflows/website-preview.yml so per-PR
+// builds resolve their assets and links under /agent-smith/pr-<N>/ instead
+// of /agent-smith/. Falls back to the production base for main and local
+// dev builds.
+const base = process.env.PR_PREVIEW_BASE ?? '/agent-smith';
+
 export default defineConfig({
   site: 'https://sherodtaylor.github.io',
-  base: '/agent-smith',
+  base,
   trailingSlash: 'never',
   output: 'static',
   integrations: [

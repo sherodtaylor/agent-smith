@@ -245,8 +245,12 @@ func webUIFallback(loginCmd *exec.Cmd, authURL string, stdin io.WriteCloser) err
 		tunnelURL = "https://" + tunnelURL
 	}
 
-	// Single-use submission guard — the first POST wins.
+	// Single-use submission guard — the first POST wins. Subsequent POSTs
+	// (e.g. a refresh of the success page or a second tab) get an explicit
+	// 410 Gone rather than the success template, which would be misleading.
 	var once sync.Once
+	var doneMu sync.Mutex
+	submitDone := false
 	submitted := make(chan error, 1)
 
 	tmpl := template.Must(template.New("form").Parse(`<!doctype html>
@@ -288,6 +292,14 @@ func webUIFallback(loginCmd *exec.Cmd, authURL string, stdin io.WriteCloser) err
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		doneMu.Lock()
+		alreadyDone := submitDone
+		doneMu.Unlock()
+		if alreadyDone {
+			http.Error(w, "code already submitted; this form is single-use", http.StatusGone)
+			return
+		}
+
 		if r.Method == http.MethodPost {
 			if err := r.ParseForm(); err != nil {
 				http.Error(w, "bad form", http.StatusBadRequest)
@@ -306,6 +318,9 @@ func webUIFallback(loginCmd *exec.Cmd, authURL string, stdin io.WriteCloser) err
 					return
 				}
 				stdin.Close()
+				doneMu.Lock()
+				submitDone = true
+				doneMu.Unlock()
 				submitted <- nil
 			})
 			if writeErr != nil {
@@ -355,7 +370,16 @@ func webUIFallback(loginCmd *exec.Cmd, authURL string, stdin io.WriteCloser) err
 			if err != nil {
 				return err
 			}
-			// Keep polling until credentials are real, then exit.
+			// Code piped to claude auth's stdin; reap the subprocess before
+			// the credential poll completes so it isn't left as a zombie.
+			// The Wait runs in a goroutine because we still want to keep
+			// polling credsAreReal in parallel — claude finishes after a
+			// short delay once the code is validated.
+			go func() {
+				if waitErr := loginCmd.Wait(); waitErr != nil {
+					fmt.Fprintln(os.Stderr, "[reauth] claude auth login exited:", waitErr)
+				}
+			}()
 		case <-ticker.C:
 			if credsAreReal() {
 				fmt.Println("[reauth] valid credentials detected — auth complete")

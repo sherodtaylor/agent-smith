@@ -34,6 +34,11 @@ cut-a-release procedure.
   the time the operator reached it. Set via the new
   `REAUTH_HUMAN_TIMEOUT` env var (Go duration: `"15m"`, `"1h"`).
   Invalid values log a warning and fall back to 30m.
+  **`REAUTH_HUMAN_TIMEOUT=0`** disables the timeout entirely — the
+  web form stays up until creds arrive or the process is killed.
+  Useful for fresh agents whose own Matrix DM path isn't yet
+  configured (chicken-and-egg: bot can't DM the operator the auth URL
+  because it doesn't yet have working Matrix credentials).
 
 ---
 

@@ -62,6 +62,27 @@ Move everything under `[Unreleased]` into a new `[X.Y.Z] - YYYY-MM-DD`
 section. Keep `[Unreleased]` as an empty stub. Commit on `main` (or via PR)
 **before** tagging — the GitHub Release body is copied from this section.
 
+### 2b. Update the website for user-visible changes
+
+If anything in this release changes what an operator or end user sees —
+new chart values, persona shifts, agent roster changes, new flags, runtime
+behavior changes — update `website/src/` before tagging:
+
+- `website/src/pages/index.astro` — hero copy, capabilities list, "ls crew".
+- `website/src/components/MeetTheCrew.astro` + `website/src/data/crew-status.json`
+  — agent roster.
+- `website/src/content/docs/*.md` — Starlight docs (getting-started,
+  deployment, agents, security, operations, architecture).
+
+The PR-canary GH Pages preview (workflow at
+`.github/workflows/website-preview.yml`) builds + publishes the site to
+`https://sherodtaylor.github.io/agent-smith/pr-<N>/` on every PR that
+touches `website/**`, so reviewers can see drift before merge.
+
+The runbook order is intentional: CHANGELOG and website land together so
+the tag, the GitHub Release body, and the public site never drift more
+than one PR apart.
+
 ### 3. Tag and create the GitHub Release
 
 ```bash

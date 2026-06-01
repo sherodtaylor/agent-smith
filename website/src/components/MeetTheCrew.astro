@@ -20,11 +20,12 @@ function stateOf(name: string): SpriteState {
 
 const devbotState = stateOf('devbot');
 const infrabotState = stateOf('infrabot');
+const pmbotState = stateOf('pmbot');
 ---
 <section id="ls-crew" class="meet-crew" style="margin-top: var(--space-20);">
   <h2>$ ls crew</h2>
   <p class="measure" style="color: var(--fg-muted);">
-    Two agents today, running as peers. One image, parametric persona —
+    Three agents today, running as peers. One image, parametric persona —
     new crew members are a directory under <code>agents/</code>, not a fork.
   </p>
   <div class="row">
@@ -42,6 +43,14 @@ const infrabotState = stateOf('infrabot');
         Owns k3s + Flux, watches the cluster, ships manifests through GitOps.
       </figcaption>
     </figure>
+    <figure class="card">
+      <div class:list={['sprite-placeholder', pmbotState]} aria-label={`PMBot — product agent (${pmbotState})`}>PM</div>
+      <figcaption>
+        <strong>PMBot</strong> — product agent.
+        Owns vision, roadmap, and PRDs. Gates work for alignment;
+        stays out of the implementation lane.
+      </figcaption>
+    </figure>
   </div>
 </section>
 
@@ -49,7 +58,7 @@ const infrabotState = stateOf('infrabot');
   .meet-crew h2 { margin-bottom: var(--space-4); }
   .row {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(3, 1fr);
     gap: var(--space-8);
     margin-top: var(--space-8);
   }
@@ -69,6 +78,28 @@ const infrabotState = stateOf('infrabot');
     max-width: 28ch;
   }
   .card figcaption strong { color: var(--fg); }
+  /* PMBot sprite placeholder — replace with a proper pixel-art SVG matching
+     DevBot/InfraBot once one is designed. */
+  .sprite-placeholder {
+    width: 128px;
+    height: 128px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: ui-monospace, monospace;
+    font-size: 2.5rem;
+    font-weight: 700;
+    color: var(--accent);
+    background: var(--bg);
+    border: 2px solid var(--accent);
+    border-radius: 4px;
+    image-rendering: pixelated;
+  }
+  .sprite-placeholder.vacation { filter: saturate(0.7); opacity: 0.85; }
+  .sprite-placeholder.error    { filter: hue-rotate(15deg); }
+  @media (max-width: 900px) {
+    .row { grid-template-columns: 1fr 1fr; }
+  }
   @media (max-width: 640px) {
     .row { grid-template-columns: 1fr; }
   }

@@ -102,6 +102,38 @@ rest of the repo (settings, MCP config, channels, hooks) Just Works
 against it. **Never copy that file into a pod** — that's the exact
 failure mode the stub + iron-proxy approach was introduced to fix.
 
+## Re-authenticating cold SSO cookies
+
+The Anthropic OAuth tokens that `iron-proxy` swaps in for the stub eventually
+need a real human login (cookies expire, accounts rotate). `claude-reauth`
+runs as the pod's startup auth flow:
+
+1. Try `claude auth status` + verify the credentials on disk are real (not
+   stubs).
+2. If they're stubs, spawn `claude auth login --claudeai` and capture the
+   OAuth authorize URL.
+3. Try a headless Chromium pass with cached SSO cookies from
+   `~/.chrome-profile/`. If the cookies are warm, the redirect to the
+   callback URL completes silently and the callback `code` is piped
+   straight into the running `claude auth login` subprocess stdin.
+4. **If headless fails** (cookies cold, fresh PVC, new bot account), serve
+   a **single-purpose web form** on port 7681. The page shows the OAuth
+   authorize URL and accepts one input — the callback `code` — which is
+   piped to the same `claude auth login` subprocess stdin. The form is
+   single-use; subsequent submissions get an HTTP 410 Gone. No shell is
+   exposed.
+5. Matrix-DM the operator with the tunnel URL so they can complete the
+   flow from a browser.
+
+This replaced an earlier `ttyd` shell flow (v0.2.12 and prior). The shell
+gave operators a full writable terminal at the same hostname — convenient
+but high blast-radius if anyone else reached the ingress URL. The web form
+narrows the attack surface to "one field that accepts an OAuth code an
+attacker doesn't have."
+
+The legacy `ttyd` path is still available behind `REAUTH_MODE=ttyd` for
+emergency recovery if the web form ever breaks.
+
 ## The two GitHub tokens
 
 Two GitHub tokens travel with the agent, intentionally:

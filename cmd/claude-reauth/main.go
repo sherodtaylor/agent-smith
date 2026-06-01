@@ -22,6 +22,8 @@
 //	REAUTH_EMAIL            pre-fill email in the auth flow (optional)
 //	REAUTH_TUNNEL_HOST      external hostname for the auth tunnel
 //	REAUTH_MODE             human fallback mode — "web" (default) or "ttyd"
+//	REAUTH_HUMAN_TIMEOUT    how long the human-fallback flow waits before
+//	                        giving up (Go duration, e.g. "15m", "1h"; default 30m)
 //	MATRIX_HOMESERVER_URL   Matrix homeserver base URL
 //	MATRIX_ACCESS_TOKEN     bot Matrix access token
 //	MATRIX_ALLOWED_USERS    comma-separated; first entry receives the DM
@@ -50,13 +52,29 @@ import (
 )
 
 const (
-	callbackPrefix = "https://platform.claude.com/oauth/code/callback"
-	ttydPort       = "7681"
-	humanTimeout   = 10 * time.Minute
-	headlessWait   = 20 * time.Second
+	callbackPrefix        = "https://platform.claude.com/oauth/code/callback"
+	ttydPort              = "7681"
+	defaultHumanTimeout   = 30 * time.Minute
+	headlessWait          = 20 * time.Second
 )
 
 var authURLRE = regexp.MustCompile(`https://claude\.com/cai/oauth/authorize\S+`)
+
+// humanTimeout reads REAUTH_HUMAN_TIMEOUT as a Go duration (e.g. "15m",
+// "1h"). Falls back to the 30-minute default when unset or unparseable.
+// The window has to be long enough for the operator to receive a DM /
+// see the page link and navigate through SSO; 10m (the prior default,
+// inherited from the ttyd era) was too tight for operators who weren't
+// already on the tab.
+func humanTimeout() time.Duration {
+	if raw := os.Getenv("REAUTH_HUMAN_TIMEOUT"); raw != "" {
+		if d, err := time.ParseDuration(raw); err == nil && d > 0 {
+			return d
+		}
+		fmt.Fprintf(os.Stderr, "[reauth] WARN: REAUTH_HUMAN_TIMEOUT=%q invalid, using default %s\n", raw, defaultHumanTimeout)
+	}
+	return defaultHumanTimeout
+}
 
 func env(key, fallback string) string {
 	if v := os.Getenv(key); v != "" {
@@ -342,7 +360,8 @@ func webUIFallback(loginCmd *exec.Cmd, authURL string, stdin io.WriteCloser) err
 	fmt.Println("[reauth]", msg)
 	matrixDM(msg)
 
-	deadline := time.Now().Add(humanTimeout)
+	timeout := humanTimeout()
+	deadline := time.Now().Add(timeout)
 	ticker := time.NewTicker(3 * time.Second)
 	defer ticker.Stop()
 	for {
@@ -363,7 +382,7 @@ func webUIFallback(loginCmd *exec.Cmd, authURL string, stdin io.WriteCloser) err
 				return nil
 			}
 			if time.Now().After(deadline) {
-				return fmt.Errorf("timed out waiting for human auth (%s)", humanTimeout)
+				return fmt.Errorf("timed out waiting for human auth (%s)", timeout)
 			}
 		}
 	}
@@ -402,7 +421,8 @@ func ttydFallback(loginCmd *exec.Cmd) error {
 	fmt.Println("[reauth]", msg)
 	matrixDM(msg)
 
-	deadline := time.Now().Add(humanTimeout)
+	timeout := humanTimeout()
+	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
 		if credsAreReal() {
 			fmt.Println("[reauth] valid credentials detected — auth complete")
@@ -411,7 +431,7 @@ func ttydFallback(loginCmd *exec.Cmd) error {
 		}
 		time.Sleep(3 * time.Second)
 	}
-	return fmt.Errorf("timed out waiting for human auth (%s)", humanTimeout)
+	return fmt.Errorf("timed out waiting for human auth (%s)", timeout)
 }
 
 // ── Matrix DM ─────────────────────────────────────────────────────────────────

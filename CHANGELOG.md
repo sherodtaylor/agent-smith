@@ -21,6 +21,27 @@ cut-a-release procedure.
 
 ---
 
+## [0.2.14] - 2026-06-01
+
+### Changed
+
+- **`claude-reauth` human-fallback timeout is now configurable and the
+  default is 30m (was 10m).** The 10m window was inherited from the
+  ttyd era where the operator was expected to already have the tab
+  open. With the web-UI fallback the operator typically navigates to
+  the URL from a DM / Matrix link, so a tighter window made the form
+  go HTTP 502 (claude-reauth had exited, http server shut down) by
+  the time the operator reached it. Set via the new
+  `REAUTH_HUMAN_TIMEOUT` env var (Go duration: `"15m"`, `"1h"`).
+  Invalid values log a warning and fall back to 30m.
+  **`REAUTH_HUMAN_TIMEOUT=0`** disables the timeout entirely — the
+  web form stays up until creds arrive or the process is killed.
+  Useful for fresh agents whose own Matrix DM path isn't yet
+  configured (chicken-and-egg: bot can't DM the operator the auth URL
+  because it doesn't yet have working Matrix credentials).
+
+---
+
 ## [0.2.13] - 2026-05-31
 
 ### Changed

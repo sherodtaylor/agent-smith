@@ -21,6 +21,30 @@ cut-a-release procedure.
 
 ---
 
+## [0.2.13] - 2026-05-31
+
+### Changed
+
+- **`claude-reauth` human fallback is now a single-purpose web form, not
+  a shell.** When SSO cookies are cold and a human is needed, the binary
+  serves a one-page HTML form on port 7681. The form shows the OAuth
+  authorize URL and accepts one input — the callback code — which is
+  piped to `claude auth login --claudeai`'s stdin. No shell access is
+  exposed; even on an unauthenticated ingress the attack surface is "one
+  form field that takes an OAuth code." The legacy ttyd shell remains
+  available behind `REAUTH_MODE=ttyd` for emergency recovery.
+
+### Fixed
+
+- **`claude-reauth` stdin pipe set up post-Start was silently nil.**
+  `cmd.StdinPipe()` returns an error after `cmd.Start()`, so the
+  headless-success path's stdin-write was writing to nil (would have
+  panicked if reached). `spawnAuthLogin` now wires `StdinPipe`
+  before `Start` and returns the writer alongside the cmd. The
+  headless path and the new web UI fallback both reuse it.
+
+---
+
 ## [0.2.12] - 2026-05-31
 
 ### Fixed

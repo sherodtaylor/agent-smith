@@ -1,0 +1,61 @@
+name: website preview
+
+# Per-PR canary previews of the website. On a PR that touches website/**,
+# builds the site, publishes it to `gh-pages/pr-<N>/`, and comments the
+# preview URL on the PR. On PR close (merged or not), removes the
+# `pr-<N>/` directory from the gh-pages branch.
+#
+# Main-branch deploy is in `website.yml`; both write to the same gh-pages
+# branch and serialize via the `pages` concurrency group.
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, closed]
+    paths:
+      - 'website/**'
+      - 'docs/**'
+      - 'README.md'
+      - '.github/workflows/website-preview.yml'
+
+permissions:
+  contents: write       # rossjrw/pr-preview-action pushes to gh-pages
+  pull-requests: write  # rossjrw/pr-preview-action comments on the PR
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build-and-deploy:
+    # Skip the build step entirely when the PR is closing — the deploy
+    # action's `action: remove` mode only needs the PR number, not the
+    # built output.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        if: github.event.action != 'closed'
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1'
+
+      - name: Install + build
+        if: github.event.action != 'closed'
+        working-directory: website
+        env:
+          # Astro reads PR_PREVIEW_BASE from astro.config.mjs so links and
+          # asset URLs resolve correctly under /agent-smith/pr-<N>/.
+          PR_PREVIEW_BASE: /agent-smith/pr-${{ github.event.number }}/
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          bun install --frozen-lockfile
+          bun run build
+
+      - name: Deploy preview to gh-pages/pr-<N>/
+        uses: rossjrw/pr-preview-action@v1
+        with:
+          source-dir: ./website/dist
+          preview-branch: gh-pages
+          umbrella-dir: pr-preview
+          action: auto

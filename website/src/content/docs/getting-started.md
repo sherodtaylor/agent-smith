@@ -71,6 +71,7 @@ The other values worth knowing on a first install:
 | `agentRepos` | `[sherodtaylor/homelab]` | Space-separated `owner/name` list cloned to `/workspace/<basename>`. |
 | `primaryRepo` | `homelab` | The repo whose checkout becomes the agent's working directory. |
 | `matrix.allowedUsers` | `""` | Comma-separated allowlist of senders the bot reacts to. Empty defers to `setup.sh` default. |
+| `matrix.autoJoinRooms` | `[]` | List of Matrix room IDs/aliases the bot should join at startup. Idempotent; the bot stays in rooms it already joined. Eliminates the manual `/invite` step for fresh bot accounts. |
 | `ironProxy.enabled` | `true` | Sets `dnsPolicy: None` + DNS at `ironProxy.clusterIp`. |
 | `ironProxy.clusterIp` | `10.43.100.100` | Where the agent's DNS resolves. |
 | `persistence.home.size` | `10Gi` | `~/.claude/` PVC. |
@@ -109,7 +110,14 @@ inspection on `tmux attach`.
 
 ## First contact
 
-Invite the bot to a Matrix room. Tag it:
+If you set `matrix.autoJoinRooms`, the bot has already joined those rooms
+at startup. Otherwise invite the bot manually from each room you want it in:
+
+```
+/invite @infrabot:example.com
+```
+
+Once joined, tag the bot to wake it:
 
 ```
 @infrabot ping

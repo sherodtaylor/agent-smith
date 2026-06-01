@@ -19,15 +19,19 @@ Use when shipping a new version of the image **and** chart.
    since the last tag.
 2. Move `[Unreleased]` in `CHANGELOG.md` into a new `[X.Y.Z]` section.
    The GitHub Release body is copied from this section.
-3. Tag and create the GitHub Release in one shot via
+3. **Update the website** (`website/src/`) for any user-visible changes:
+   feature flags surfaced to operators, persona / agent roster shifts,
+   new chart values, docs that drift. Catch the drift here so the
+   public-facing site doesn't slip a release behind the changelog.
+4. Tag and create the GitHub Release in one shot via
    `.claude/references/cut-release.sh --version vX.Y.Z`. CI picks up the
    tag and publishes the image + chart automatically.
-4. Verify all four artifacts (git tag, GitHub Release, container image,
+5. Verify all four artifacts (git tag, GitHub Release, container image,
    Helm chart OCI artifact) via `.claude/references/check-release.sh`.
-5. Bump consuming `HelmRelease`s via
+6. Bump consuming `HelmRelease`s via
    `.claude/references/bump-homelab-chart.sh`. Flux reconciles on the
    next poll.
-6. Confirm the new pods come up Ready and the bot acknowledges a tag in
+7. Confirm the new pods come up Ready and the bot acknowledges a tag in
    `#dev` on the new version.
 
 Tags are the **only** trigger for the chart job. Pushes to `main` never
@@ -62,6 +66,33 @@ directory and a Matrix identity.
 Full procedure:
 [`docs/runbooks/adding-agent.md`](https://github.com/sherodtaylor/agent-smith/blob/main/docs/runbooks/adding-agent.md)
 and the dedicated [Agents](/agent-smith/agents) page.
+
+## Plugin updates are pod-bounce-deployed
+
+Claude Code's `enabledPlugins` schema only accepts `true`/`false` — there is
+no settings-level version pin for GitHub-source plugins. `reconcile-plugins.sh`
+runs at every pod start and unconditionally uninstalls + reinstalls every
+enabled plugin, so a pod bounce becomes the deploy mechanism for upstream
+plugin fixes:
+
+1. Upstream plugin repo (e.g. `claude-code-channel-matrix`) merges a fix
+   and tags a new version.
+2. Bounce the agent pod: `kubectl delete pod <agent>-0 -n agents` (the
+   StatefulSet recreates it).
+3. Init container's `reconcile-plugins.sh` uninstalls the cached plugin
+   version and pulls the latest from the marketplace.
+4. Pod is now on the new plugin version. Verify via `installed_plugins.json`
+   inside the pod.
+
+Safety net: if a marketplace's `add` or `update` call fails in the
+marketplace-refresh phase, Phase 2 skips reinstall for any plugin sourced
+from that marketplace — so a network blip during bounce doesn't take the
+plugin offline entirely. The cached install stays put until the next
+healthy reconcile.
+
+Trade-off: every enabled plugin (including stable ones) reinstalls on
+every bounce. Per-plugin opt-out can be added later if startup time grows
+uncomfortably; for now the cost is "a few seconds of init."
 
 ## Anthropic 401 Unauthorized
 

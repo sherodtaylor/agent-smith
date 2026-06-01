@@ -6,8 +6,9 @@ import sitemap from '@astrojs/sitemap';
 // PR_PREVIEW_BASE is set by .github/workflows/website-preview.yml so per-PR
 // builds resolve their assets and links under /agent-smith/pr-<N>/ instead
 // of /agent-smith/. Falls back to the production base for main and local
-// dev builds.
-const base = process.env.PR_PREVIEW_BASE ?? '/agent-smith';
+// dev builds. Trailing slash is normalized off — Astro accepts either
+// form but consistency keeps the diff between PR preview and main minimal.
+const base = (process.env.PR_PREVIEW_BASE ?? '/agent-smith').replace(/\/$/, '');
 
 export default defineConfig({
   site: 'https://sherodtaylor.github.io',

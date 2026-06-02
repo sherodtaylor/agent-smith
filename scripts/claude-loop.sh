@@ -16,26 +16,25 @@ fi
 echo "[claude-loop] starting (agent=${AGENT_NAME})"
 
 # Ensure Claude is authenticated before entering the main loop.
-# claude-reauth.py tries headless Playwright first (SSO cookies), then falls
-# back to a ttyd browser tunnel + Matrix DM if cookies have expired.
+#
+# Always invoke `claude-reauth` here. claude-reauth has its own internal
+# short-circuit (since v0.2.14): it returns immediately if `isLoggedIn() &&
+# credsAreReal() && credsAreActive()` — and that last check is an actual
+# HTTP probe against api.anthropic.com that detects a 401 on the wire.
+#
+# Prior behavior here gated on `claude auth status` which only checks the
+# shape of the local credentials file. A stale-but-well-formed token
+# passed `claude auth status` cleanly, so `_ensure_auth` returned "auth
+# ok" and claude-reauth never ran — meaning the API-probe gate inside
+# claude-reauth never ran either. Always invoking claude-reauth here
+# makes the probe authoritative.
+#
+# Tryheadless inside claude-reauth handles the SSO-cookie-warm fast
+# path; the web-UI fallback handles the human-required slow path with a
+# Matrix DM. Both are cheap on the happy path (probe call + immediate
+# return).
 _ensure_auth() {
-  # `claude auth status` returns 0 for well-formed stub credentials — check
-  # the token value directly so new pods with only stubs trigger reauth.
-  local _token=""
-  if [ -f "$CREDS_DST" ]; then
-    _token=$(jq -r '.claudeAiOauth.accessToken // ""' "$CREDS_DST" 2>/dev/null || true)
-  fi
-  if [[ "$_token" == "access-token-stub" ]]; then
-    echo "[claude-loop] stub credentials detected — running claude-reauth"
-    claude-reauth
-    return
-  fi
-  # `claude auth status` exits 0 if logged in, 1 if not
-  if claude auth status >/dev/null 2>&1; then
-    echo "[claude-loop] auth ok"
-    return 0
-  fi
-  echo "[claude-loop] not authenticated — running claude-reauth"
+  echo "[claude-loop] running claude-reauth (probes API to detect stale tokens)"
   claude-reauth
 }
 

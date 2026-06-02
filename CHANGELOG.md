@@ -21,6 +21,27 @@ cut-a-release procedure.
 
 ---
 
+## [0.2.15] - 2026-06-02
+
+### Fixed
+
+- **`claude-loop.sh` `_ensure_auth` no longer short-circuits on
+  `claude auth status` before reaching `claude-reauth`.** Previous
+  shape: check stub token → check `claude auth status` exit code →
+  only run `claude-reauth` if status non-zero. But `claude auth
+  status` exits 0 for any well-formed local credentials file, including
+  ones Anthropic has expired and is 401-ing on the wire. So an agent
+  whose token had gone stale (typical for infrabot in this fleet) hit
+  401s in every API call but `_ensure_auth` returned happy without
+  calling `claude-reauth` — meaning the API-probe gate (added in
+  v0.2.14) inside `claude-reauth` never ran, so the reauth + Matrix DM
+  flow never fired. Now `_ensure_auth` always invokes `claude-reauth`;
+  `claude-reauth`'s own three-gate check (isLoggedIn + credsAreReal +
+  credsAreActive) is authoritative. Probe cost on the happy path is
+  one HTTP request (~200ms).
+
+---
+
 ## [0.2.14] - 2026-06-01
 
 ### Changed

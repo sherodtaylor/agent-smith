@@ -98,6 +98,22 @@ spec:
               value: {{ $agent.name | quote }}
             - name: PRIMARY_REPO
               value: {{ $agent.primaryRepo | quote }}
+            # Matrix env mirrored from the setup container so claude-reauth's
+            # matrixDM() (which reads os.Getenv directly) can DM the operator
+            # when human auth is needed. The matrix-channel plugin itself
+            # reads from ~/.claude/channels/matrix/.env (written by setup.sh)
+            # and works without these env vars, but claude-reauth doesn't.
+            {{- $homeserverUrl := default (default "" $root.Values.matrix.homeserverUrl) $agent.matrix.homeserverUrl }}
+            {{- if $homeserverUrl }}
+            - name: MATRIX_HOMESERVER_URL
+              value: {{ $homeserverUrl | quote }}
+            {{- end }}
+            - name: MATRIX_BOT_USER_ID
+              value: {{ $agent.matrix.botUserId | quote }}
+            {{- if $agent.matrix.allowedUsers }}
+            - name: MATRIX_ALLOWED_USERS
+              value: {{ $agent.matrix.allowedUsers | quote }}
+            {{- end }}
             {{- if $root.Values.reauth.tunnel.enabled }}
             - name: REAUTH_TUNNEL_HOST
               value: {{ printf "%s-shell%s" $agent.name $root.Values.reauth.tunnel.hostSuffix | quote }}

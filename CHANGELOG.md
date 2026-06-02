@@ -21,6 +21,30 @@ cut-a-release procedure.
 
 ---
 
+## [0.2.16] - 2026-06-02
+
+### Fixed
+
+- **Chart: agent main container was missing `MATRIX_HOMESERVER_URL`,
+  `MATRIX_BOT_USER_ID`, `MATRIX_ALLOWED_USERS`.** These env vars were
+  set on the `setup` init container only (statefulset.yaml:53-67), not
+  on the `agent` main container — so `claude-reauth`'s `matrixDM()`
+  (which reads `os.Getenv` directly) hit "Matrix not configured — DM
+  skipped" even when Matrix was fully working. The matrix-channel
+  plugin itself didn't notice because it reads from
+  `~/.claude/channels/matrix/.env` (which `setup.sh` writes from the
+  init container's env), so typing indicators + replies in rooms kept
+  working, masking the chart bug. claude-reauth's "wake the operator
+  with a DM" path was the only thing that needed the env vars
+  directly — and it didn't have them.
+
+  Fix: mirror the same MATRIX_* env block onto the `agent` container.
+  No new chart value; same sourcing logic as the setup container
+  (per-agent `matrix.*` override over the fleet-wide `matrix.*`
+  default).
+
+---
+
 ## [0.2.15] - 2026-06-02
 
 ### Fixed

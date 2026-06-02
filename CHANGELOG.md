@@ -19,6 +19,25 @@ cut-a-release procedure.
 
 ## [Unreleased]
 
+### Fixed
+
+- **`cmd/claude-reauth/main.go`: actually probe the Anthropic API
+  before short-circuiting "already authenticated".** The probe was
+  drafted on the `fix/reauth-human-timeout-configurable` branch as
+  commit `fd1541a` and the v0.2.15 CHANGELOG referenced it as if it
+  had landed in v0.2.14, but the commit was never included in PR #91
+  — only the two timeout commits were. claude-loop.sh:18-39 also
+  refers to a `credsAreActive()` gate, but the function did not
+  exist on main. Result: an agent whose token Anthropic has rejected
+  on the wire passes `isLoggedIn() && credsAreReal()` (both shape
+  checks), claude-reauth exits "nothing to do", and the running
+  claude crashloops on 401 with no operator DM (e.g. infrabot today,
+  post-v0.2.17 deploy). New `credsAreActive()` makes an explicit GET
+  to `api.anthropic.com/api/oauth/profile`; only HTTP 401 forces
+  reauth (transport errors and 5xx return true so a network blip
+  doesn't flap an agent into the human flow). Wired in as the third
+  gate in `main()`.
+
 ---
 
 ## [0.2.17] - 2026-06-03

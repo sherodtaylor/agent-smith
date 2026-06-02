@@ -23,6 +23,20 @@ cut-a-release procedure.
 
 ## [0.2.14] - 2026-06-01
 
+### Fixed
+
+- **`claude-reauth` now probes the Anthropic API on startup before
+  short-circuiting "already authenticated".** Previous gate was
+  `isLoggedIn() && credsAreReal()`, but `claude auth status` (the
+  CLI behind `isLoggedIn`) returns 0 for any well-formed local
+  token — including one Anthropic has expired and is 401-ing on the
+  wire. New `credsAreActive()` gate makes an explicit GET to
+  `api.anthropic.com/api/oauth/profile`; only an HTTP 401 forces
+  reauth (transport errors and 5xx return true so a network blip
+  doesn't flap into the reauth flow). Closes the bug where an
+  expired-token agent silently 401'd in its API calls and the reauth
+  + Matrix-DM flow never fired.
+
 ### Changed
 
 - **`claude-reauth` human-fallback timeout is now configurable and the

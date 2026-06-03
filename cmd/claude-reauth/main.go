@@ -123,6 +123,63 @@ func credsAreReal() bool {
 	return tok != "" && !strings.Contains(tok, "stub")
 }
 
+// credsAreActive probes Anthropic's API to verify the local token is still
+// accepted on the wire. Returns false ONLY on an explicit HTTP 401 — meaning
+// the token is well-formed and locally "logged in" but Anthropic has rejected
+// it (typical for expired OAuth tokens). Network errors, 5xx, etc. all
+// return true so a transient outage doesn't flap an agent into the reauth
+// flow.
+//
+// Without this probe `claude auth status` returns 0 (and `credsAreReal`
+// returns true) for any well-formed local file, so an expired token
+// silently 401s in the running agent's API calls and the reauth flow
+// is never triggered. The probe is the third gate in main() so an
+// active 401 forces a fresh login + DM.
+//
+// Endpoint: https://api.anthropic.com/api/oauth/profile — returns 200
+// with a valid OAuth token, 401 otherwise. iron-proxy passes the call
+// through (and swaps a stub token for the real one if the local file
+// still has a stub; the swap path is independent of the probe).
+func credsAreActive() bool {
+	path := filepath.Join(os.Getenv("HOME"), ".claude", ".credentials.json")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return true // can't probe without a token; another gate handles this
+	}
+	var creds struct {
+		ClaudeAiOauth struct {
+			AccessToken string `json:"accessToken"`
+		} `json:"claudeAiOauth"`
+	}
+	if err := json.Unmarshal(data, &creds); err != nil {
+		return true
+	}
+	tok := creds.ClaudeAiOauth.AccessToken
+	if tok == "" {
+		return true
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
+		"https://api.anthropic.com/api/oauth/profile", nil)
+	if err != nil {
+		return true
+	}
+	req.Header.Set("Authorization", "Bearer "+tok)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "[reauth] auth probe transport error (treating as OK):", err)
+		return true
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusUnauthorized {
+		fmt.Fprintln(os.Stderr, "[reauth] auth probe → HTTP 401, token rejected by Anthropic — forcing reauth")
+		return false
+	}
+	return true
+}
+
 // ── spawn claude auth login ───────────────────────────────────────────────────
 
 // spawnAuthLogin starts `claude auth login --claudeai` and captures the OAuth
@@ -521,7 +578,7 @@ func main() {
 	agentName := env("AGENT_NAME", "agent")
 	fmt.Printf("[reauth] starting (agent=%s)\n", agentName)
 
-	if isLoggedIn() && credsAreReal() {
+	if isLoggedIn() && credsAreReal() && credsAreActive() {
 		fmt.Println("[reauth] already authenticated — nothing to do")
 		os.Exit(0)
 	}

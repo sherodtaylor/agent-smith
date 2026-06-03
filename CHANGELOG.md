@@ -19,6 +19,10 @@ cut-a-release procedure.
 
 ## [Unreleased]
 
+---
+
+## [0.2.18] - 2026-06-03
+
 ### Fixed
 
 - **`cmd/claude-reauth/main.go`: actually probe the Anthropic API

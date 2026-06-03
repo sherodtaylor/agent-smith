@@ -19,6 +19,31 @@ cut-a-release procedure.
 
 ## [Unreleased]
 
+### Fixed
+
+- **`cmd/claude-reauth/main.go`: human-fallback polling loop no
+  longer declares "auth complete" while the on-disk tokens are
+  unchanged.** Previous gate was shape-only `credsAreReal()` —
+  ignoring whether `claude auth login` had actually written anything
+  new. Concrete bug: infrabot entered the human flow with stale-
+  but-well-formed real tokens (the ones the startup probe just
+  401'd on); the polling loop's first 3s tick fired "valid
+  credentials detected" before Sherod's form submission could land,
+  reauth exited, claude-loop overlaid the same stale tokens, and
+  claude crash-looped on 401 forever. pmbot escaped the bug by
+  accident — its PVC happened to be in the stub state at startup,
+  so `credsAreReal()` returned false on tick #1 and the loop
+  actually waited.
+
+### Changed
+
+- **Refactor:** extracted `readAccessToken()` + `pollUntilFreshCreds(originalToken, timeout)`
+  helpers so the web-UI fallback (`webUIFallback`) and the legacy
+  ttyd fallback (`ttydFallback`) share one polling implementation.
+  Success criterion is now "token is real **and** different from
+  what was on disk at fallback entry," making both fallbacks
+  deterministic regardless of PVC starting state.
+
 ---
 
 ## [0.2.19] - 2026-06-03

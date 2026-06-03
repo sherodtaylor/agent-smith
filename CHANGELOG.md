@@ -19,6 +19,10 @@ cut-a-release procedure.
 
 ## [Unreleased]
 
+---
+
+## [0.2.17] - 2026-06-03
+
 ### Fixed
 
 - **`scripts/entrypoint.sh`: iron-proxy CA was not installed in the

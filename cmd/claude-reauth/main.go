@@ -210,7 +210,12 @@ func spawnAuthLogin() (*exec.Cmd, string, io.WriteCloser, error) {
 		return nil, "", nil, fmt.Errorf("start claude auth login: %w", err)
 	}
 
-	// Read lines until we see the auth URL (printed to combined stdout+stderr)
+	// Read lines until we see the auth URL (printed to combined stdout+stderr).
+	// After the URL is captured, keep streaming subprocess output through the
+	// same `[claude-auth]` prefix so post-submit messages (OAuth exchange
+	// errors, "Login successful", etc.) reach the pod's stdout instead of
+	// being thrown away — silent failure here used to hide every reason a
+	// submitted code didn't produce fresh tokens.
 	authURL := ""
 	scanner := bufio.NewScanner(stdout)
 	for scanner.Scan() {
@@ -218,8 +223,11 @@ func spawnAuthLogin() (*exec.Cmd, string, io.WriteCloser, error) {
 		fmt.Println("[claude-auth]", line)
 		if m := authURLRE.FindString(line); m != "" {
 			authURL = m
-			// Drain the rest of stdout in background so the pipe doesn't block
-			go io.Copy(io.Discard, stdout)
+			go func() {
+				for scanner.Scan() {
+					fmt.Println("[claude-auth]", scanner.Text())
+				}
+			}()
 			break
 		}
 	}

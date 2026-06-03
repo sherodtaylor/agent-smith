@@ -19,6 +19,21 @@ cut-a-release procedure.
 
 ## [Unreleased]
 
+### Fixed
+
+- **`cmd/claude-reauth/main.go`: keep streaming `claude auth login`
+  subprocess output after the auth URL is captured.** Previously
+  `spawnAuthLogin` did `go io.Copy(io.Discard, stdout)` once it had
+  the OAuth URL, so every subprocess line emitted after that point
+  (OAuth-exchange errors, "Login successful", token-write failures)
+  was silently thrown away. Observed today: pmbot's web form
+  returned "Code submitted" but no fresh tokens were ever written
+  and pmbot's stdout stayed blank — the subprocess had failed in a
+  way we couldn't see. Now the post-URL goroutine keeps the same
+  `[claude-auth]` prefix and forwards every subsequent line to the
+  pod's stdout, so any reason a submitted code doesn't produce real
+  credentials is visible in `kubectl logs`.
+
 ---
 
 ## [0.2.18] - 2026-06-03

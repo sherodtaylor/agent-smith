@@ -8,6 +8,20 @@ PROMPTS_FILE="/opt/agent-smith/agents/${AGENT_NAME}/keepalive-prompts.txt"
 
 echo "[entrypoint] agent=${AGENT_NAME} workdir=${WORKDIR}"
 
+# Trust the iron-proxy MITM CA in the *main* container too. setup.sh already
+# installs it in the init container, but its trust store doesn't carry over
+# to this container's filesystem. Anything in this container that relies on
+# the system CA bundle (Go's http.DefaultClient — used by claude-reauth's
+# matrixDM/createRoom — and Python/curl/wget) fails TLS verification on
+# matrix.lab.sherodtaylor.dev without this. The Bun/Node matrix plugin works
+# regardless because it honors NODE_EXTRA_CA_CERTS.
+if [ -n "${IRON_PROXY_CA_CRT:-}" ]; then
+  mkdir -p /usr/local/share/ca-certificates
+  printf '%s' "${IRON_PROXY_CA_CRT}" > /usr/local/share/ca-certificates/iron-proxy.crt
+  update-ca-certificates 2>/dev/null
+  echo "[entrypoint] installed iron-proxy CA into main container trust store"
+fi
+
 # Stagger devbot/infrabot pod restarts to prevent synchronized restart cadence
 STARTUP_JITTER=$(( RANDOM % 45 ))
 echo "[entrypoint] startup jitter: sleeping ${STARTUP_JITTER}s"

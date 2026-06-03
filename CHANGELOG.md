@@ -19,6 +19,24 @@ cut-a-release procedure.
 
 ## [Unreleased]
 
+### Fixed
+
+- **`scripts/entrypoint.sh`: iron-proxy CA was not installed in the
+  main container's system trust store.** `setup.sh` runs
+  `update-ca-certificates` in the init container, but that filesystem
+  doesn't carry over to the agent main container — so anything in the
+  main container that depends on `/etc/ssl/certs/ca-certificates.crt`
+  (Go's `http.DefaultClient`, curl, wget, Python) failed TLS
+  verification against `matrix.lab.sherodtaylor.dev`. Concrete impact:
+  `cmd/claude-reauth/main.go`'s `matrixDM()` / `ensureDMRoom()` died
+  with `x509: certificate signed by unknown authority` whenever a bot
+  hit expired tokens, leaving the reauth web UI running but with no
+  operator DM — bots silently waited for someone to notice. The
+  Bun/Node matrix-channel plugin was unaffected because it reads
+  `NODE_EXTRA_CA_CERTS`. `entrypoint.sh` now writes
+  `IRON_PROXY_CA_CRT` to `/usr/local/share/ca-certificates/` and runs
+  `update-ca-certificates` again at main-container startup.
+
 ---
 
 ## [0.2.16] - 2026-06-02

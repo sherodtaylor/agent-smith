@@ -105,11 +105,14 @@ func isLoggedIn() bool {
 
 // ── credentials check ─────────────────────────────────────────────────────────
 
-func credsAreReal() bool {
+// readAccessToken returns the accessToken value currently on disk, or "" if
+// the file is missing, malformed, or has no token. A single source of truth
+// for everything that needs to know what the on-disk OAuth token is.
+func readAccessToken() string {
 	path := filepath.Join(os.Getenv("HOME"), ".claude", ".credentials.json")
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return false
+		return ""
 	}
 	var creds struct {
 		ClaudeAiOauth struct {
@@ -117,10 +120,40 @@ func credsAreReal() bool {
 		} `json:"claudeAiOauth"`
 	}
 	if err := json.Unmarshal(data, &creds); err != nil {
-		return false
+		return ""
 	}
-	tok := creds.ClaudeAiOauth.AccessToken
+	return creds.ClaudeAiOauth.AccessToken
+}
+
+func credsAreReal() bool {
+	tok := readAccessToken()
 	return tok != "" && !strings.Contains(tok, "stub")
+}
+
+// pollUntilFreshCreds blocks until the on-disk accessToken is both real
+// (well-formed, non-stub) AND different from `originalToken`. The
+// "different from" check is what stops the polling loop from declaring
+// "auth complete" on tick #1 when the PVC entered the human flow with
+// stale-but-well-formed real tokens — without it, `claude auth login`
+// never gets a chance to write fresh creds before the loop exits and
+// claude restarts using the same stale tokens that just 401'd.
+//
+// Returns nil on success, an error on timeout. When timeout == 0 the
+// poll runs forever.
+func pollUntilFreshCreds(originalToken string, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	ticker := time.NewTicker(3 * time.Second)
+	defer ticker.Stop()
+	for {
+		<-ticker.C
+		current := readAccessToken()
+		if current != "" && !strings.Contains(current, "stub") && current != originalToken {
+			return nil
+		}
+		if timeout > 0 && time.Now().After(deadline) {
+			return fmt.Errorf("timed out waiting for human auth (%s)", timeout)
+		}
+	}
 }
 
 // credsAreActive probes Anthropic's API to verify the local token is still
@@ -435,6 +468,8 @@ func webUIFallback(loginCmd *exec.Cmd, authURL string, stdin io.WriteCloser) err
 		server.Shutdown(ctx)
 	}()
 
+	originalToken := readAccessToken()
+
 	msg := fmt.Sprintf("[%s] Claude auth needed — SSO cookies expired.\nOpen: %s\nPaste the OAuth code into the form and submit; the bot resumes automatically.", agentName, tunnelURL)
 	fmt.Println("[reauth]", msg)
 	matrixDM(msg)
@@ -443,9 +478,13 @@ func webUIFallback(loginCmd *exec.Cmd, authURL string, stdin io.WriteCloser) err
 	if timeout == 0 {
 		fmt.Println("[reauth] REAUTH_HUMAN_TIMEOUT=0 — web form will stay up indefinitely until creds arrive")
 	}
-	deadline := time.Now().Add(timeout)
-	ticker := time.NewTicker(3 * time.Second)
-	defer ticker.Stop()
+
+	// Run the poll in a goroutine so we can also surface server errors and
+	// stdin-write errors from the submit handler. The poll itself owns the
+	// timeout semantics and the "tokens actually changed" success signal.
+	pollDone := make(chan error, 1)
+	go func() { pollDone <- pollUntilFreshCreds(originalToken, timeout) }()
+
 	for {
 		select {
 		case err := <-serverErr:
@@ -456,16 +495,14 @@ func webUIFallback(loginCmd *exec.Cmd, authURL string, stdin io.WriteCloser) err
 			if err != nil {
 				return err
 			}
-			// Keep polling until credentials are real, then exit.
-		case <-ticker.C:
-			if credsAreReal() {
-				fmt.Println("[reauth] valid credentials detected — auth complete")
-				matrixDM(fmt.Sprintf("[%s] Auth complete. Claude is back online.", agentName))
-				return nil
+			// Keep polling until credentials are real and changed.
+		case err := <-pollDone:
+			if err != nil {
+				return err
 			}
-			if timeout > 0 && time.Now().After(deadline) {
-				return fmt.Errorf("timed out waiting for human auth (%s)", timeout)
-			}
+			fmt.Println("[reauth] valid credentials detected — auth complete")
+			matrixDM(fmt.Sprintf("[%s] Auth complete. Claude is back online.", agentName))
+			return nil
 		}
 	}
 }
@@ -499,6 +536,8 @@ func ttydFallback(loginCmd *exec.Cmd) error {
 		tunnelURL = "https://" + tunnelURL
 	}
 
+	originalToken := readAccessToken()
+
 	msg := fmt.Sprintf("[%s] Claude auth needed — SSO cookies expired.\nOpen: %s\nComplete the login in the browser terminal, then the bot restarts automatically.", agentName, tunnelURL)
 	fmt.Println("[reauth]", msg)
 	matrixDM(msg)
@@ -507,16 +546,12 @@ func ttydFallback(loginCmd *exec.Cmd) error {
 	if timeout == 0 {
 		fmt.Println("[reauth] REAUTH_HUMAN_TIMEOUT=0 — ttyd will stay up indefinitely until creds arrive")
 	}
-	deadline := time.Now().Add(timeout)
-	for timeout == 0 || time.Now().Before(deadline) {
-		if credsAreReal() {
-			fmt.Println("[reauth] valid credentials detected — auth complete")
-			matrixDM(fmt.Sprintf("[%s] Auth complete. Claude is back online.", agentName))
-			return nil
-		}
-		time.Sleep(3 * time.Second)
+	if err := pollUntilFreshCreds(originalToken, timeout); err != nil {
+		return err
 	}
-	return fmt.Errorf("timed out waiting for human auth (%s)", timeout)
+	fmt.Println("[reauth] valid credentials detected — auth complete")
+	matrixDM(fmt.Sprintf("[%s] Auth complete. Claude is back online.", agentName))
+	return nil
 }
 
 // ── Matrix DM ─────────────────────────────────────────────────────────────────

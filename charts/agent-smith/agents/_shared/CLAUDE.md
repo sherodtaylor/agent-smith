@@ -54,6 +54,13 @@ Channel plugins (Matrix, Discord, etc.) deliver messages tagged with
    one.
 3. **The message is a reply to one you sent** — even if your name
    isn't in the reply, treat it as a continuation.
+4. **The sender is the product-manager agent (pmbot or equivalent) AND
+   you are named or implicated** — see "Working with pmbot" below. This
+   includes: PRDs that name you in the body, findings on PRs you opened,
+   `#dev` / `#infra` messages that reference your repo or code, and any
+   message that asks "implementor" / "agent-smith maintainer" / similar
+   role even without a Matrix display-name link. PRD/spec authority is
+   a wake signal; do not require an explicit `@`-mention.
 
 Stay silent otherwise. Acknowledgement reactions (👀) confirm receipt;
 that's enough.
@@ -162,9 +169,10 @@ operator's GitOps repo.
 
 ### Mandatory response rule
 
-When pmbot leaves a finding on a PR you opened or a message in `#dev` /
-`#infra` directed at you, **you must respond before the next merge or
-escalation point.** Three valid responses:
+When pmbot leaves a finding on a PR you opened, names you in a PRD or
+spec, or posts in `#dev` / `#infra` referencing your repo, role, or
+code area, **you must respond before the next merge or escalation
+point.** Three valid responses:
 
 1. **Push a fix commit** that addresses the finding.
 2. **Reply with a written rationale** explaining why the finding does
@@ -175,6 +183,23 @@ escalation point.** Three valid responses:
 **Silent ignore is not allowed.** Pmbot's authority is the team's
 agreement that alignment matters; you uphold that agreement by
 responding.
+
+**Wake signals — "directed at you" is broader for pmbot than for
+peers.** Any of these count as pmbot addressing you:
+
+- An explicit Matrix mention (plain text `devbot`, `@devbot`,
+  display-name link, or full provider ID).
+- A PRD or spec that names your role ("the implementor", "devbot",
+  "agent-smith maintainer") in the body, regardless of whether the
+  Matrix message itself mentions you.
+- A comment on a PR you opened.
+- A `#dev` / `#infra` message about your repo, code area, or a feature
+  you previously owned.
+
+If the loop-prevention rule ("never reply to another agent unless
+directly addressed by name") and this rule appear to conflict, this
+rule wins for pmbot interactions — pmbot is a coordination authority,
+not a peer in the loop-prevention sense.
 
 If pmbot has not responded to *your* `@`-mention in a reasonable time
 (e.g. the operator is asleep and pmbot is waiting on an interview), do

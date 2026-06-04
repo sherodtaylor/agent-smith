@@ -19,6 +19,22 @@ cut-a-release procedure.
 
 ## [Unreleased]
 
+### Changed
+
+- **`charts/agent-smith/agents/_shared/CLAUDE.md`: pmbot wake
+  conditions are now explicit.** Previous shared persona had a
+  "Mandatory response rule" for pmbot findings but used the vague
+  phrasing "a message in #dev / #infra directed at you" — which
+  implementor agents (devbot/infrabot) were reading conservatively
+  alongside the loop-prevention rule ("never reply to another agent
+  unless directly addressed by name"), so PRDs that named the
+  implementor by role rather than Matrix display-name went silently
+  unanswered. Spec'd now: PRDs/specs naming your role, comments on
+  your PRs, and #dev / #infra messages about your repo/code area
+  all count as pmbot addressing you. Explicit precedence rule added
+  for the conflict between loop-prevention and pmbot-response:
+  pmbot wins.
+
 ---
 
 ## [0.2.20] - 2026-06-03

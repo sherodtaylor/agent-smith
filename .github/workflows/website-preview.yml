@@ -67,3 +67,23 @@ jobs:
           preview-branch: gh-pages
           umbrella-dir: pr-preview
           action: auto
+
+      # Regression guard for preview deploys: same shape as the main
+      # workflow's check — if the preview URL doesn't go 200 within
+      # 5 minutes of the deploy, fail loudly. Only run on the deploy
+      # leg of the workflow; on PR close the preview is removed and
+      # the URL is expected to 404.
+      - name: Verify preview URL is reachable
+        if: github.event.action != 'closed'
+        run: |
+          URL="https://sherodtaylor.github.io/agent-smith/pr-preview/pr-${{ github.event.number }}/"
+          for i in $(seq 1 30); do
+            code=$(curl -s -o /dev/null -w "%{http_code}" "${URL}?cb=$(date +%s)")
+            echo "[$i/30] ${URL} -> ${code}"
+            if [ "$code" = "200" ]; then
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "ERROR: preview URL still not 200 after 5 minutes — check repo Settings → Pages." >&2
+          exit 1

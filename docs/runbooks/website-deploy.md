@@ -24,13 +24,35 @@ deploy — the site doesn't surface that content.
 
 One-time, per repo. Skip if Pages is already serving the site.
 
-1. Repo Settings → Pages → **Source = GitHub Actions**. Do **not** pick
-   "Deploy from a branch" — the workflow uses the official `actions/deploy-pages`
-   action and the "branch" mode races with it.
+1. Repo Settings → Pages → **Source = Deploy from a branch**,
+   **Branch = `gh-pages` / `/` (root)**. The deploy workflow uses
+   `peaceiris/actions-gh-pages` which writes the built site to the
+   `gh-pages` branch; Pages needs to be reading from that branch or
+   nothing ever publishes.
+
+   **If you see `build_type: workflow` in `GET /repos/.../pages`**, the
+   source is wrong — Pages is waiting for `actions/deploy-pages` artifacts
+   we don't produce. Fix with:
+
+   ```bash
+   curl -X PUT \
+     -H "Authorization: token $GH_TOKEN" \
+     -H "Accept: application/vnd.github+json" \
+     https://api.github.com/repos/sherodtaylor/agent-smith/pages \
+     -d '{"build_type":"legacy","source":{"branch":"gh-pages","path":"/"}}'
+   curl -X POST \
+     -H "Authorization: token $GH_TOKEN" \
+     https://api.github.com/repos/sherodtaylor/agent-smith/pages/builds
+   ```
+
+   The "Verify production URL is reachable" step in `website.yml` catches
+   this misconfig instantly — without it, gh-pages pushes succeed but
+   the live URL stays stale and the workflow reports green.
+
 2. Branch protection on `main` is unchanged — the workflow runs after merge,
    not on the PR.
 3. First push of `website.yml` will run the workflow and provision the
-   `github-pages` environment. The first deploy takes ~3 min; subsequent
+   `gh-pages` branch. The first deploy takes ~3 min; subsequent
    deploys are ~90 s.
 
 ## Pushing the branch the first time

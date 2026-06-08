@@ -70,3 +70,23 @@ jobs:
           user_name: 'github-actions[bot]'
           user_email: 'github-actions[bot]@users.noreply.github.com'
           commit_message: 'website: deploy ${{ github.sha }}'
+
+      # Regression guard: if GitHub Pages is misconfigured (e.g. `build_type`
+      # flipped to `workflow` again, source pointed at the wrong branch, or
+      # any other cause), the deploy commit lands on gh-pages but the live
+      # URL never updates. Without this step the workflow reports SUCCESS
+      # while the site silently stays stale. We poll for up to 5 minutes;
+      # GH Pages typically catches up in <2 min after a gh-pages push.
+      - name: Verify production URL is reachable
+        run: |
+          URL="https://sherodtaylor.github.io/agent-smith/"
+          for i in $(seq 1 30); do
+            code=$(curl -s -o /dev/null -w "%{http_code}" "${URL}?cb=$(date +%s)")
+            echo "[$i/30] ${URL} -> ${code}"
+            if [ "$code" = "200" ]; then
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "ERROR: production URL still not 200 after 5 minutes — check repo Settings → Pages." >&2
+          exit 1

@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://sherodtaylor.github.io/agent-smith/sitemap-index.xml

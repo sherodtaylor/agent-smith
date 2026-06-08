@@ -29,8 +29,8 @@ const dndLabel = dndAgents
   </span>
   <span class="right">
     <span class="dot">●</span> {agents.length} agents ·
-    PRs this week: {prsThisWeek} ·
-    last release: {lastRelease}
+    PRs this week: <span data-live-prs>{prsThisWeek}</span> ·
+    last release: <span data-live-release>{lastRelease}</span>
     {dndLabel && <> · <span class="dnd">{dndLabel}</span></>}
   </span>
 </div>

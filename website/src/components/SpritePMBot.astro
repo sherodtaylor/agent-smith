@@ -1,0 +1,26 @@
+---
+// Inline the SVG at build time. Eliminates the per-sprite HTTP request that
+// pushed LCP > 1500ms on the landing (hero + audit-tail + MeetTheCrew each
+// triggered an extra round-trip via <img src=…>).
+import active   from '../../public/sprites/pmbot.svg?raw';
+import vacation from '../../public/sprites/pmbot-vacation.svg?raw';
+import errorVar from '../../public/sprites/pmbot-error.svg?raw';
+
+type SpriteState = 'active' | 'vacation' | 'error';
+interface Props { state?: SpriteState; size?: number; ariaLabel?: string; }
+const { state = 'active', size = 64, ariaLabel } = Astro.props;
+
+const sources: Record<SpriteState, string> = { active, vacation, error: errorVar };
+const label = ariaLabel ?? `PMBot — product agent (${state})`;
+const sized = sources[state]
+  .replace(/<svg\b/, `<svg width="${size}" height="${size}"`)
+  .replace(/aria-label="[^"]*"/, `aria-label="${label}"`);
+---
+<span class:list={['sprite', state]} set:html={sized} />
+
+<style>
+  .sprite          { display: inline-block; line-height: 0; }
+  .sprite svg      { image-rendering: pixelated; image-rendering: -moz-crisp-edges; }
+  .sprite.vacation svg { filter: saturate(0.7); }
+  .sprite.error    svg { filter: hue-rotate(15deg); }
+</style>

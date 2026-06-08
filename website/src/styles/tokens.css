@@ -8,9 +8,10 @@
   --bg-elev:     #13171b;
   --fg:          #d4d7dc;
   --fg-muted:    #7a818c;
-  --accent:      #5fbf8d;
-  --accent-warn: #d4a85f;
-  --accent-err:  #cf6679;
+  --accent:         #5fbf8d;
+  --accent-warn:    #d4a85f;
+  --accent-err:     #cf6679;
+  --accent-product: #b878d6;
 
   /* Type — spec §2.2 */
   --font-display: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;

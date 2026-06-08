@@ -2,6 +2,7 @@
 import { getCollection } from 'astro:content';
 import SpriteDevbot from './SpriteDevbot.astro';
 import SpriteInfrabot from './SpriteInfrabot.astro';
+import SpritePMBot from './SpritePMBot.astro';
 import statusData from '../data/crew-status.json';
 
 type SpriteState = 'active' | 'vacation' | 'error';
@@ -39,6 +40,7 @@ const entries = (await getCollection('log'))
           <span class="agent">
             {e.data.agent === 'devbot'   && <SpriteDevbot   state={agentState} size={16} />}
             {e.data.agent === 'infrabot' && <SpriteInfrabot state={agentState} size={16} />}
+            {e.data.agent === 'pmbot'    && <SpritePMBot    state={agentState} size={16} />}
             <span class="name">{e.data.agent}</span>
             {agentState === 'vacation' && <span class="dnd-glyph" aria-label="quiet hours">💤</span>}
           </span>

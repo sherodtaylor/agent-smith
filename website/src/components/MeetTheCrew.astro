@@ -1,6 +1,7 @@
 ---
 import SpriteDevbot from './SpriteDevbot.astro';
 import SpriteInfrabot from './SpriteInfrabot.astro';
+import SpritePMBot from './SpritePMBot.astro';
 import statusData from '../data/crew-status.json';
 
 type SpriteState = 'active' | 'vacation' | 'error';
@@ -44,7 +45,7 @@ const pmbotState = stateOf('pmbot');
       </figcaption>
     </figure>
     <figure class="card">
-      <div class:list={['sprite-placeholder', pmbotState]} aria-label={`PMBot — product agent (${pmbotState})`}>PM</div>
+      <SpritePMBot state={pmbotState} size={128} />
       <figcaption>
         <strong>PMBot</strong> — product agent.
         Owns vision, roadmap, and PRDs. Gates work for alignment;
@@ -78,25 +79,6 @@ const pmbotState = stateOf('pmbot');
     max-width: 28ch;
   }
   .card figcaption strong { color: var(--fg); }
-  /* PMBot sprite placeholder — replace with a proper pixel-art SVG matching
-     DevBot/InfraBot once one is designed. */
-  .sprite-placeholder {
-    width: 128px;
-    height: 128px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-family: ui-monospace, monospace;
-    font-size: 2.5rem;
-    font-weight: 700;
-    color: var(--accent);
-    background: var(--bg);
-    border: 2px solid var(--accent);
-    border-radius: 4px;
-    image-rendering: pixelated;
-  }
-  .sprite-placeholder.vacation { filter: saturate(0.7); opacity: 0.85; }
-  .sprite-placeholder.error    { filter: hue-rotate(15deg); }
   @media (max-width: 900px) {
     .row { grid-template-columns: 1fr 1fr; }
   }

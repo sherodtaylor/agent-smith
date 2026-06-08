@@ -4,6 +4,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 import TmuxStatusBar from '../../components/TmuxStatusBar.astro';
 import SpriteDevbot from '../../components/SpriteDevbot.astro';
 import SpriteInfrabot from '../../components/SpriteInfrabot.astro';
+import SpritePMBot from '../../components/SpritePMBot.astro';
 import statusData from '../../data/crew-status.json';
 
 type SpriteState = 'active' | 'vacation' | 'error';
@@ -47,6 +48,7 @@ const rendered = await Promise.all(
               <span class="agent">
                 {e.data.agent === 'devbot'   && <SpriteDevbot   state={agentState} size={16} />}
                 {e.data.agent === 'infrabot' && <SpriteInfrabot state={agentState} size={16} />}
+                {e.data.agent === 'pmbot'    && <SpritePMBot    state={agentState} size={16} />}
                 <span class="name">{e.data.agent}</span>
                 {agentState === 'vacation' && <span class="dnd-glyph" aria-label="quiet hours">💤</span>}
               </span>{' '}

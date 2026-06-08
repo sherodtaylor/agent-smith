@@ -8,6 +8,14 @@ on:
       - 'docs/**'
       - 'README.md'
       - '.github/workflows/website.yml'
+    # Release tags trigger a rebuild so the tmux status bar's
+    # `last_release` reflects the new version immediately.
+    tags:
+      - 'v*'
+  # Daily refresh so `prs_this_week` stays accurate even when no
+  # website source files change between releases.
+  schedule:
+    - cron: '17 7 * * *'
   workflow_dispatch: {}
 
 permissions:

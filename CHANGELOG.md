@@ -19,6 +19,10 @@ cut-a-release procedure.
 
 ## [Unreleased]
 
+---
+
+## [0.2.21] - 2026-06-08
+
 ### Changed
 
 - **`charts/agent-smith/agents/_shared/CLAUDE.md`: pmbot wake

@@ -12,8 +12,9 @@ export interface GhClient {
 export interface BuildOpts { now: Date; }
 
 const AGENTS = [
-  { name: 'devbot',   role: 'code'  as const },
-  { name: 'infrabot', role: 'infra' as const },
+  { name: 'devbot',   role: 'code'    as const },
+  { name: 'infrabot', role: 'infra'   as const },
+  { name: 'pmbot',    role: 'product' as const },
 ];
 
 export async function buildCrewStatus(client: GhClient, { now }: BuildOpts) {

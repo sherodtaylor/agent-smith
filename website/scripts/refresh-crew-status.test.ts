@@ -16,6 +16,8 @@ describe('buildCrewStatus', () => {
 
     expect(status.agents.find(a => a.name === 'devbot')?.last_pr?.number).toBe(40);
     expect(status.agents.find(a => a.name === 'infrabot')?.last_pr?.number).toBe(28);
+    expect(status.agents.find(a => a.name === 'pmbot')?.last_pr).toBeNull();
+    expect(status.agents.length).toBe(3);
     expect(status.prs_this_week).toBe(3);
     expect(status.last_release).toBe('v0.1.21');
     expect(status.generated_at).toBeDefined();
@@ -25,5 +27,6 @@ describe('buildCrewStatus', () => {
     const ghClient = { listPRs: async () => [], latestRelease: async () => ({ tag_name: 'v0.1.0' }) };
     const status = await buildCrewStatus(ghClient, { now: new Date() });
     expect(status.agents.find(a => a.name === 'devbot')?.last_pr).toBeNull();
+    expect(status.agents.find(a => a.name === 'pmbot')?.last_pr).toBeNull();
   });
 });

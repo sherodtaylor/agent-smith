@@ -50,6 +50,11 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           bun install --frozen-lockfile
+          # Generate crew-status.json before build. The file is gitignored
+          # because CI owns it; without this step, src/pages/log/index.astro's
+          # import resolves to nothing and the build fails. Mirrors the
+          # main-branch website.yml step.
+          bun scripts/refresh-crew-status.ts
           bun run build
 
       - name: Deploy preview to gh-pages/pr-<N>/

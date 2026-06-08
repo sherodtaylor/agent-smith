@@ -18,6 +18,7 @@ mode this directory exists to prevent.
 | [`agent-down.md`](agent-down.md) | Agent is unresponsive, restarting, or silent in Matrix |
 | [`ci-failure.md`](ci-failure.md) | The release workflow failed |
 | [`secret-rotation.md`](secret-rotation.md) | Rotating a Matrix / GitHub / iron-proxy credential |
+| [`website-deploy.md`](website-deploy.md) | Site triggers, PR-preview URLs, and CDN propagation |
 
 ## How to write a runbook
 

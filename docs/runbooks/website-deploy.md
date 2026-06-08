@@ -17,8 +17,78 @@ Source-of-truth README for the site itself:
 - `README.md` — homepage cards link to it
 - `.github/workflows/website.yml` — the workflow itself
 
+It also runs on:
+
+- **`v*` release tags** — so the tmux status bar's `last_release` reflects a new chart release immediately, without waiting for the next website-source change.
+- **Daily cron (`17 7 * * *`)** — keeps `prs_this_week` fresh between source changes.
+- **`workflow_dispatch`** — for manual reruns from the Actions tab.
+
 A push that only changes `agents/` or `charts/` does **not** trigger a
-deploy — the site doesn't surface that content.
+deploy — the site doesn't surface that content. (The tag trigger above
+*does* cover the version bump that comes with a chart release.)
+
+## PR previews
+
+`website-preview.yml` publishes a per-PR canary of the site so reviewers
+can eyeball the build before it merges.
+
+**URL pattern**
+
+```
+https://sherodtaylor.github.io/agent-smith/pr-preview/pr-<N>/
+```
+
+The umbrella directory (`pr-preview/`) is configured by
+`rossjrw/pr-preview-action`'s `umbrella-dir: pr-preview` argument.
+Astro's `base` for these builds is set by the `PR_PREVIEW_BASE` env in
+`website-preview.yml` (`/agent-smith/pr-<N>/`) and read by
+`website/astro.config.mjs` — the asset paths in the rendered HTML
+resolve against the preview subdirectory, not the production root.
+
+**Lifecycle**
+
+| PR event | Workflow action | Result on `gh-pages` |
+|---|---|---|
+| `opened` / `reopened` / `synchronize` | deploy | `pr-preview/pr-<N>/` (re)written |
+| `closed` (merged or not) | remove | `pr-preview/pr-<N>/` deleted |
+
+Once a PR closes (including merge), the preview directory is removed.
+To re-eyeball a merged change, use the production URL after `website.yml`
+publishes — the preview URL will 404.
+
+**Concurrency**
+
+`website.yml` and `website-preview.yml` push to the same `gh-pages`
+branch. Both workflows declare `concurrency.group: pages` so a
+fast-following preview deploy can't race the main deploy. If you see
+`Updates were rejected because the remote contains work that you do not
+have locally` in the deploy step, this is the safety net — re-run the
+workflow.
+
+**Verifying a preview is live**
+
+```bash
+# Find the workflow run that deployed the preview commit:
+gh run list --repo sherodtaylor/agent-smith --workflow website-preview.yml --limit 5
+
+# Confirm gh-pages has the umbrella entry:
+git fetch origin gh-pages
+git ls-tree origin/gh-pages -- pr-preview/
+
+# Hit the URL (cache-bust if Pages just rotated):
+curl -sI "https://sherodtaylor.github.io/agent-smith/pr-preview/pr-<N>/?cb=$(date +%s)"
+```
+
+If the URL 404s but the gh-pages tree has the directory, GitHub Pages
+CDN is still propagating — give it 1–5 min. A `Last-Modified` header
+older than the deploy commit confirms the lag.
+
+**Required path filter**
+
+`website-preview.yml` only fires when the PR touches `website/**`,
+`docs/**`, `README.md`, or its own workflow file. PRs that change only
+`agents/` or `charts/` skip the preview build — the site doesn't render
+that content, so there's nothing to preview.
 
 ## First-time setup
 

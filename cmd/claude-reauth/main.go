@@ -489,7 +489,80 @@ func matrixDM(msg string) {
 	resp.Body.Close()
 }
 
+// ensureDMRoom returns an existing 1:1 room with targetUser if one is
+// already recorded in the bot's m.direct account-data, otherwise creates
+// one and persists it. Without the lookup, every claude-reauth invocation
+// spawned a fresh DM room on the operator's client — noisy and confusing.
+//
+// Errors anywhere in the lookup path fall back to createRoom: better to
+// leak a room than fail to deliver the auth URL.
 func ensureDMRoom(homeserver, token, targetUser string) string {
+	if roomID := lookupExistingDMRoom(homeserver, token, targetUser); roomID != "" {
+		return roomID
+	}
+	roomID := createDMRoom(homeserver, token, targetUser)
+	if roomID != "" {
+		// Best-effort: persist into m.direct so the next invocation hits
+		// the lookup path and reuses this room.
+		_ = persistDMRoom(homeserver, token, targetUser, roomID)
+	}
+	return roomID
+}
+
+// whoami returns the bot's own user_id via /_matrix/client/v3/account/whoami.
+func whoami(homeserver, token string) string {
+	req, _ := http.NewRequest(http.MethodGet,
+		homeserver+"/_matrix/client/v3/account/whoami", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return ""
+	}
+	defer resp.Body.Close()
+	var result struct {
+		UserID string `json:"user_id"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return ""
+	}
+	return result.UserID
+}
+
+// lookupExistingDMRoom returns the first room ID in m.direct for targetUser,
+// or "" if the bot has no recorded DM with them. Failures (missing account
+// data, decode errors) return "" silently — caller falls back to create.
+func lookupExistingDMRoom(homeserver, token, targetUser string) string {
+	userID := whoami(homeserver, token)
+	if userID == "" {
+		return ""
+	}
+	req, _ := http.NewRequest(http.MethodGet,
+		fmt.Sprintf("%s/_matrix/client/v3/user/%s/account_data/m.direct",
+			homeserver, url.PathEscape(userID)),
+		nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return ""
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		// 404 just means no m.direct set yet — first-ever DM. Not an error.
+		return ""
+	}
+	// m.direct is map[user_id][]room_id.
+	var direct map[string][]string
+	if err := json.NewDecoder(resp.Body).Decode(&direct); err != nil {
+		return ""
+	}
+	rooms := direct[targetUser]
+	if len(rooms) == 0 {
+		return ""
+	}
+	return rooms[0]
+}
+
+func createDMRoom(homeserver, token, targetUser string) string {
 	body, _ := json.Marshal(map[string]any{
 		"is_direct": true,
 		"invite":    []string{targetUser},
@@ -513,6 +586,53 @@ func ensureDMRoom(homeserver, token, targetUser string) string {
 	}
 	json.NewDecoder(resp.Body).Decode(&result)
 	return result.RoomID
+}
+
+// persistDMRoom upserts the new room into the bot's m.direct account-data
+// so subsequent invocations find it via lookupExistingDMRoom. Best-effort —
+// failure means we leak a duplicate room on the next reauth, not a delivery
+// outage.
+func persistDMRoom(homeserver, token, targetUser, roomID string) error {
+	userID := whoami(homeserver, token)
+	if userID == "" {
+		return fmt.Errorf("whoami failed")
+	}
+	// Read-modify-write to preserve any existing entries for other users.
+	getReq, _ := http.NewRequest(http.MethodGet,
+		fmt.Sprintf("%s/_matrix/client/v3/user/%s/account_data/m.direct",
+			homeserver, url.PathEscape(userID)),
+		nil)
+	getReq.Header.Set("Authorization", "Bearer "+token)
+	getResp, err := http.DefaultClient.Do(getReq)
+	if err != nil {
+		return err
+	}
+	direct := map[string][]string{}
+	if getResp.StatusCode == http.StatusOK {
+		_ = json.NewDecoder(getResp.Body).Decode(&direct)
+	}
+	getResp.Body.Close()
+	rooms := direct[targetUser]
+	for _, r := range rooms {
+		if r == roomID {
+			return nil // already present
+		}
+	}
+	direct[targetUser] = append(rooms, roomID)
+
+	body, _ := json.Marshal(direct)
+	putReq, _ := http.NewRequest(http.MethodPut,
+		fmt.Sprintf("%s/_matrix/client/v3/user/%s/account_data/m.direct",
+			homeserver, url.PathEscape(userID)),
+		bytes.NewReader(body))
+	putReq.Header.Set("Authorization", "Bearer "+token)
+	putReq.Header.Set("Content-Type", "application/json")
+	putResp, err := http.DefaultClient.Do(putReq)
+	if err != nil {
+		return err
+	}
+	putResp.Body.Close()
+	return nil
 }
 
 // ── main ──────────────────────────────────────────────────────────────────────

@@ -21,6 +21,24 @@ cut-a-release procedure.
 
 ---
 
+## [0.2.22] - 2026-06-09
+
+### Fixed
+
+- **`cmd/claude-reauth`: reuse the existing operator DM room instead
+  of creating a fresh one on every reauth invocation.** The previous
+  `ensureDMRoom` was named for behavior it never had — it always
+  called `createRoom`. The fix actually checks the bot's `m.direct`
+  account-data (via `/account/whoami` + `/user/<self>/account_data/m.direct`)
+  before creating, and persists newly created rooms back into
+  `m.direct` so future invocations reuse them. Operator's client no
+  longer accumulates duplicate 1:1 rooms after each reauth (homelab
+  team report 2026-06-09). Every failure path falls back to
+  `createRoom` — better to leak a room than fail to deliver the auth
+  URL.
+
+---
+
 ## [0.2.21] - 2026-06-08
 
 ### Changed

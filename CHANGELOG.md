@@ -19,6 +19,15 @@ cut-a-release procedure.
 
 ## [Unreleased]
 
+### Added
+
+- **Dockerfile installs the Infisical CLI** at `/usr/local/bin/infisical`
+  so agents can push/pull secrets via machine-identity creds
+  (per agent's ExternalSecret) without a sidecar. Pinned to
+  `INFISICAL_CLI_VERSION=0.41.0`; bump via `--build-arg` or by editing
+  the `ARG` line. amd64 only for now (matches kubectl + ttyd).
+  Consumed by `homelab/scripts/lib/infisical.sh`'s env-only mode.
+
 ---
 
 ## [0.2.21] - 2026-06-08

@@ -51,6 +51,16 @@ RUN KUBECTL_VERSION=$(curl -sL https://dl.k8s.io/release/stable.txt) \
          "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl" \
     && chmod +x /usr/local/bin/kubectl
 
+# Infisical CLI — consumed by homelab/scripts/lib/infisical.sh for in-pod
+# secret push/pull (machine-identity flow). Pin a version; bump deliberately.
+ARG INFISICAL_CLI_VERSION=0.41.0
+RUN curl -fsSL -o /tmp/infisical.tar.gz \
+         "https://github.com/Infisical/infisical/releases/download/infisical-cli/v${INFISICAL_CLI_VERSION}/infisical_${INFISICAL_CLI_VERSION}_linux_amd64.tar.gz" \
+    && tar -xz -C /usr/local/bin -f /tmp/infisical.tar.gz infisical \
+    && chmod +x /usr/local/bin/infisical \
+    && rm /tmp/infisical.tar.gz \
+    && infisical --version
+
 # Node.js (for the Claude Code CLI)
 RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
     && apt-get install -y nodejs \

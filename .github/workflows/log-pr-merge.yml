@@ -49,11 +49,15 @@ jobs:
           RUN=$(echo "${{ github.run_id }}" | sha1sum | cut -c1-6)
 
           mkdir -p website/src/content/log
+          # run_id is quoted — YAML otherwise parses hex digests like
+          # `2e4654` as scientific notation (2×10^4654 → float), but the
+          # content-collection schema requires z.string(). PR #106's entry
+          # broke website builds for a week because of an unquoted hit.
           cat > "$FILE" <<EOF
           ---
           timestamp: ${TS}
           agent: ${AGENT}
-          run_id: ${RUN}
+          run_id: "${RUN}"
           kind: pr_merged
           summary: "merged PR #${NUMBER} (${TITLE})"
           link: ${LINK}

@@ -41,7 +41,8 @@ buried in terminal scrollback.
 Ship a single binary, `agent-smith`, with a first subcommand `attach`
 that gives the operator a multi-agent cockpit on their laptop.
 
-When the operator runs `agent-smith attach --fleet`:
+When the operator runs `agent-smith attach` (no args — **fleet is
+the default**):
 
 - They get a side-by-side view of all four agents in their terminal.
 - Each pane shows the live tmux session inside that agent's pod.
@@ -68,7 +69,7 @@ this PRD does not change what Matrix sees.
 ```
 operator's laptop                           k3s cluster (agents ns)
 ┌──────────────────────────────────┐        ┌──────────────────────┐
-│  $ agent-smith attach --fleet    │        │  devbot-0    pod     │
+│  $ agent-smith attach            │        │  devbot-0    pod     │
 │                                  │        │  ├─ tmux main        │
 │  ┌────────┬────────┐             │   ┌───►│  └─ claude (PTY)     │
 │  │ devbot │ infrab │             │   │    │                       │
@@ -111,28 +112,30 @@ operator who has herdr installed and is attached.
 
 The operator can:
 
-- [ ] Run `agent-smith attach --fleet` on a freshly cloned repo with
-      no extra setup (kubeconfig + Tailscale connectivity to the
-      cluster assumed present) and see a live attach to all four
-      agents, side-by-side if herdr is on `$PATH`, single-pane
-      otherwise.
+- [ ] Run `agent-smith attach` on a freshly cloned repo with no extra
+      setup (kubeconfig + Tailscale connectivity to the cluster
+      assumed present) and see a live attach to **all four agents
+      by default**, side-by-side if herdr is on `$PATH`, single-pane
+      otherwise. No `--fleet` flag — fleet is the default behavior.
 - [ ] With herdr installed, see per-pane status icons or labels
       reflecting `working / idle / blocked / done` within whatever
       latency herdr's manifest mechanism delivers (~seconds for
       pattern-based detectors; faster if hook-based). The exact
       latency is a property of herdr's detection mechanism, not
       something we own — see Open Q #1.
-- [ ] Run `agent-smith attach devbot` (or any single agent name) and
-      see only that agent's tmux session, regardless of herdr
-      presence. This is the "I just want to look at one bot" path.
+- [ ] Run `agent-smith attach --bot devbot` (or any single agent
+      name via `--bot`) and see only that agent's tmux session,
+      regardless of herdr presence. This is the "I just want to look
+      at one bot" path.
 - [ ] Close the terminal, reopen it the next day, run
-      `agent-smith attach --fleet` again, and pick up where they
-      left off (panes reattach to the same long-lived tmux sessions
-      inside the pods — no work is lost).
+      `agent-smith attach` again, and pick up where they left off
+      (panes reattach to the same long-lived tmux sessions inside
+      the pods — no work is lost).
 - [ ] Pass `--no-herdr` to force the fallback path even when herdr
       is installed (escape hatch for debugging).
 - [ ] Run `agent-smith --help` and see `attach` documented as the
-      first subcommand. Each flag is documented inline.
+      first subcommand. Each flag (`--bot`, `--no-herdr`) is
+      documented inline.
 
 ## Non-goals (v1)
 
@@ -243,6 +246,11 @@ Three remain after rounds 2 + 3:
   - Clarified brandbot consumer is out of scope here (nit).
   - Dropped NATS from sidecar transport per DevBot's YAGNI
     consult; added explicit non-goal.
+- **2026-06-27 round 4 — CLI shape:**
+  - `agent-smith attach` defaults to fleet view (no `--fleet` flag).
+  - Single-bot mode uses `--bot <name>` (was a bare positional in
+    round 3). Reduces footguns where a typo names a non-existent
+    bot but parses as a valid string positional.
 - **2026-06-27 round 3 — Sherod scope reduction:**
   - **Cut the sidecar entirely.** No in-pod component, no chart
     change, no audit channel publishing.

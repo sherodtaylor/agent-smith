@@ -1,10 +1,12 @@
 # CLAUDE.md — agent-smith
 
 This file is loaded into every Claude Code session that opens this repo. It is
-**not** the agent persona — that lives in `agents/_shared/CLAUDE.md` and
-`agents/<name>/CLAUDE.md` and is assembled into `~/.claude/CLAUDE.md` inside the
-running pod. This file is for **whoever is editing the codebase** (Sherod, a
-contributor, or a Claude Code session driving the repo from a laptop).
+**not** the agent persona — that lives in `agents/_shared/CLAUDE.md` and each
+persona's `CLAUDE.md` (chart-bundled under `charts/agent-smith/agents/<name>/`,
+or an operator-supplied ConfigMap) and is assembled into `~/.claude/CLAUDE.md`
+inside the running pod. This file is for **whoever is editing the codebase**
+(Sherod, a contributor, or a Claude Code session driving the repo from a
+laptop).
 
 ---
 
@@ -32,8 +34,9 @@ production constraints:
 - **No agent ever holds a real credential.** Stub tokens in the image,
   iron-proxy swaps real values in at egress. A pod compromise leaks nothing
   outside the allowlist.
-- **One image, parametric persona.** New agents are a directory under `agents/`
-  plus a `StatefulSet`. No image rebuild per agent, no per-agent forks.
+- **One image, parametric persona.** New agents are a directory under
+  `charts/agent-smith/agents/` (or an operator-supplied ConfigMap) plus a
+  `StatefulSet`. No image rebuild per agent, no per-agent forks.
 - **Single source of truth for behaviour.** Cross-agent rules (PR review,
   mention handling, secret hygiene) live in `agents/_shared/CLAUDE.md`. Persona
   files only add specifics.
@@ -57,22 +60,35 @@ into their own cluster — not a personal script.
 ├── .github/workflows/docker.yml       # CI: image + chart on tag, image on main
 │
 ├── agents/
-│   ├── _shared/
-│   │   ├── CLAUDE.md                  # base rules every agent inherits
-│   │   ├── settings.json              # plugins, permissions, hooks
-│   │   └── .credentials.json          # stub OAuth payload (literal placeholders)
-│   ├── devbot/   CLAUDE.md mcp.json subagents/
-│   └── infrabot/ CLAUDE.md mcp.json subagents/
+│   └── _shared/
+│       ├── CLAUDE.md                  # base rules every agent inherits
+│       ├── settings.json              # plugins, permissions, hooks
+│       └── .credentials.json          # stub OAuth payload (literal placeholders)
+│   (per-agent personas ship as chart-bundled examples — see charts/agent-smith/agents/)
+│
+├── cmd/claude-reauth/                 # small Go binary backing the reauth flow
+│   └── main.go  go.mod                # pairs with the ingress/service-reauth chart templates
 │
 ├── scripts/
 │   ├── setup.sh                       # init container: assemble ~/.claude, clone repos
 │   ├── entrypoint.sh                  # main container: tmux + claude (pane 0) + shell (pane 1)
 │   ├── claude-loop.sh                 # pane 0 wrapper: restore stub creds, exp backoff
-│   └── check-pr-comments.sh           # Stop-hook: rewake on unaddressed PR comments
+│   ├── check-pr-comments.sh           # Stop-hook: rewake on unaddressed PR comments
+│   ├── attach-agent.sh                # tmux-attach to a running agent pod
+│   ├── reconcile-plugins.sh           # sync plugin set against settings.json
+│   └── strip-ansi.sh                  # strip ANSI codes from captured pane output
 │
 ├── charts/agent-smith/                # Helm chart (one release = one agent)
 │   ├── Chart.yaml  README.md  values.yaml
-│   └── templates/  _helpers.tpl  rbac.yaml  serviceaccount.yaml  statefulset.yaml  NOTES.txt
+│   ├── templates/                     # _helpers.tpl rbac serviceaccount statefulset NOTES.txt
+│   │                                  # + configmap-persona/-shared, ingress/service-reauth
+│   └── agents/                        # example personas bundled with the chart
+│       ├── _shared/CLAUDE.md
+│       ├── example-devbot/            CLAUDE.md mcp.json
+│       ├── example-infrabot/          CLAUDE.md mcp.json
+│       └── example-pmbot/             CLAUDE.md mcp.json
+│
+├── tests/                             # test-chart-render.sh test-loops.sh test-reconcile.sh
 │
 ├── .claude/
 │   └── references/                    # reusable scripts referenced from runbooks
@@ -87,18 +103,32 @@ into their own cluster — not a personal script.
 │       ├── force-eso-sync.sh          # force ExternalSecret re-sync from Infisical
 │       └── restore-stub-creds.sh      # restore stub credentials in a running pod
 │
-└── docs/
-    ├── architecture.md                # full design detail (when README isn't enough)
-    ├── matrix-communication.md        # how agents send messages to Matrix (room/thread/native reply)
-    ├── runbooks/                      # operational playbooks (reference scripts above)
-    │   ├── README.md                  # runbook index
-    │   ├── release.md
-    │   ├── adding-agent.md
-    │   ├── oauth-401.md
-    │   ├── agent-down.md
-    │   ├── ci-failure.md
-    │   └── secret-rotation.md
-    └── superpowers/                   # implementation plans + specs (history)
+├── docs/
+│   ├── architecture.md                # full design detail (when README isn't enough)
+│   ├── matrix-communication.md        # how agents send messages to Matrix (room/thread/native reply)
+│   ├── roadmap-v1.md                  # v1 roadmap
+│   ├── adr/                           # architecture decision records
+│   ├── runbooks/                      # operational playbooks (reference scripts above)
+│   │   ├── README.md                  # runbook index
+│   │   ├── release.md
+│   │   ├── adding-agent.md
+│   │   ├── oauth-401.md
+│   │   ├── agent-down.md
+│   │   ├── ci-failure.md
+│   │   ├── secret-rotation.md
+│   │   └── website-deploy.md
+│   └── superpowers/                   # implementation plans + specs (history)
+│       plans/  specs/
+│
+└── website/                           # Astro marketing/status site
+    ├── astro.config.mjs  package.json # bun-based
+    ├── src/
+    │   ├── components/                # AsciiBox AuditTail HeroPane MeetTheCrew
+    │   │                              # SpriteDevbot/Infrabot/PMBot StatusBadge TmuxStatusBar
+    │   ├── content/                   # docs/ + log/ (release-log entries, one per merged PR)
+    │   ├── data/  layouts/  pages/  styles/
+    └── scripts/                       # check-roadmap-sync.ts generate-og-image.mjs
+                                        # refresh-crew-status.ts
 ```
 
 The Kubernetes manifests that deploy the agents are intentionally **not** in
@@ -120,7 +150,7 @@ descend only when the layer above doesn't answer the question.
 | **Diagnose an unresponsive agent** | [`docs/runbooks/agent-down.md`](docs/runbooks/agent-down.md) | pod logs, tmux attach, `claude-loop.sh` |
 | **Investigate a CI failure** | [`docs/runbooks/ci-failure.md`](docs/runbooks/ci-failure.md) | `.github/workflows/docker.yml` |
 | **Rotate a credential** | [`docs/runbooks/secret-rotation.md`](docs/runbooks/secret-rotation.md) | Infisical + ESO refresh policy |
-| **Change agent behaviour** | `agents/_shared/CLAUDE.md` | per-agent `agents/<name>/CLAUDE.md` |
+| **Change agent behaviour** | `agents/_shared/CLAUDE.md` | per-agent `charts/agent-smith/agents/<name>/CLAUDE.md` |
 | **Understand how agents talk to Matrix** | `agents/_shared/CLAUDE.md` ("How Matrix replies work") | [`docs/matrix-communication.md`](docs/matrix-communication.md) |
 | **Change cluster deploy shape** | `charts/agent-smith/values.yaml` | `templates/statefulset.yaml` |
 
@@ -200,7 +230,7 @@ Detail and threat model:
 |---|---|---|---|
 | `CLAUDE.md` (this file) | Claude Code editing this repo | Sherod / contributors / a coding session | How to work in the codebase |
 | `agents/_shared/CLAUDE.md` | the running bot (assembled into `~/.claude/CLAUDE.md` at pod startup) | the deployed agent | How to behave on Matrix |
-| `agents/<name>/CLAUDE.md` | the running bot (concatenated after shared) | the deployed agent | Per-persona rules |
+| `charts/agent-smith/agents/<name>/CLAUDE.md` | the running bot (concatenated after shared) | the deployed agent | Per-persona rules |
 
 When changing **how the bot acts at runtime**, edit `agents/_shared/CLAUDE.md`
 or the persona file. When changing **how this codebase is maintained**, edit
@@ -213,7 +243,7 @@ this file.
 - Matrix communication mechanism → [`docs/matrix-communication.md`](docs/matrix-communication.md)
 - Operational playbook → [`docs/runbooks/`](docs/runbooks/)
 - Release history → [`CHANGELOG.md`](CHANGELOG.md)
-- Bot runtime behaviour → `agents/_shared/CLAUDE.md` + persona files
+- Bot runtime behaviour → `agents/_shared/CLAUDE.md` + `charts/agent-smith/agents/<name>/CLAUDE.md`
 
 If the answer isn't in any of those, read the script. The scripts are short
 and heavily commented for exactly this case.

@@ -104,3 +104,41 @@ Call with the agent entry directly.
 {{- printf "agent-smith-persona-%s" $agent.name -}}
 {{- end -}}
 {{- end -}}
+
+{{/*
+agent-smith.runtimeFor returns "actor" or "deployment" for an agent entry.
+
+Rules:
+  - Fleet gate `actor.enabled: false` → always "deployment" regardless of
+    per-agent setting (fails safe; opt-in requires both toggles).
+  - Fleet gate true + per-agent `runtime: actor` → "actor".
+  - Fleet gate true + per-agent unset or "deployment" → "deployment".
+
+Call with a context dict: (dict "agent" $agent "Values" $.Values)
+*/}}
+{{- define "agent-smith.runtimeFor" -}}
+{{- $ctx := . -}}
+{{- if and $ctx.Values.actor $ctx.Values.actor.enabled (eq (default "deployment" $ctx.agent.runtime) "actor") -}}
+actor
+{{- else -}}
+deployment
+{{- end -}}
+{{- end -}}
+
+{{/*
+agent-smith.hasActorRuntime returns "true" (string) if ANY agent in the
+list resolves to runtime=actor. Used to gate the shared WorkerPool.
+
+Call with the root context.
+*/}}
+{{- define "agent-smith.hasActorRuntime" -}}
+{{- $root := . -}}
+{{- $agents := fromJsonArray (include "agent-smith.agentList" $root) -}}
+{{- $any := "" -}}
+{{- range $agent := $agents -}}
+{{- if eq (include "agent-smith.runtimeFor" (dict "agent" $agent "Values" $root.Values)) "actor" -}}
+{{- $any = "true" -}}
+{{- end -}}
+{{- end -}}
+{{- $any -}}
+{{- end -}}

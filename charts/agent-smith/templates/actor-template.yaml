@@ -1,0 +1,84 @@
+{{- /*
+Agent Substrate ActorTemplate — one per persona with runtime=actor.
+
+The harness container is the same agent-smith image as deployment mode,
+with the same secret refs and env. iron-proxy co-locates as a container
+inside the sandbox when actor.ironProxyMode=sidecar (default).
+
+Persona ConfigMap: intentionally NOT mounted. In actor mode the persona
+is baked into the golden snapshot at ActorTemplate apply time; changing
+the persona means creating a new ActorTemplate (immutable).
+
+durableDir carries ~/.claude + workspace state across suspend/resume so
+per-actor progress survives being suspended.
+
+Spec surface reference: docs/superpowers/specs/2026-07-29-agent-substrate-actor-mode-design.md.
+*/ -}}
+{{- $root := . -}}
+{{- $agents := fromJsonArray (include "agent-smith.agentList" .) -}}
+{{- range $agent := $agents }}
+{{- if eq (include "agent-smith.runtimeFor" (dict "agent" $agent "Values" $root.Values)) "actor" }}
+---
+apiVersion: ate.dev/v1alpha1
+kind: ActorTemplate
+metadata:
+  name: {{ $agent.name }}
+  namespace: {{ $root.Release.Namespace }}
+  labels:
+    {{- include "agent-smith.labels" $root | nindent 4 }}
+    app.kubernetes.io/component: agent
+    agent-smith.io/agent: {{ $agent.name }}
+spec:
+  sandboxClass: {{ $root.Values.actor.workerPool.sandboxClass | quote }}
+  pauseImage: "registry.k8s.io/pause:3.10.2"
+  workerSelector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ $root.Release.Name }}
+  snapshotsConfig:
+    location: {{ printf "s3://%s/%s/%s/" $root.Values.actor.snapshotStore.bucket $root.Release.Name $agent.name | quote }}
+  containers:
+    - name: agent
+      image: "{{ $root.Values.image.repository }}@{{ include "agent-smith.agentImageTag" (dict "agent" $agent "Values" $root.Values "Chart" $root.Chart) }}"
+      env:
+        - name: AGENT_NAME
+          value: {{ $agent.name | quote }}
+        - name: HOME
+          value: /root
+        {{- if $agent.existingSecret }}
+        - name: ANTHROPIC_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: {{ $agent.existingSecret }}
+              key: anthropic-api-key
+        {{- end }}
+        {{- with $root.Values.extraEnv }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- if $root.Values.actor.readyz.enabled }}
+      readyz:
+        httpGet:
+          path: {{ $root.Values.actor.readyz.path | quote }}
+          port: {{ $root.Values.actor.readyz.port }}
+      {{- end }}
+      volumeMounts:
+        - name: agent-state
+          mountPath: /root
+    {{- if eq $root.Values.actor.ironProxyMode "sidecar" }}
+    - name: iron-proxy
+      image: ironsh/iron-proxy:0.41.0
+      args: ["-config", "/etc/iron-proxy/proxy.yaml"]
+      env:
+        {{- if $agent.existingSecret }}
+        - name: GITHUB_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: {{ $agent.existingSecret }}
+              key: github-token
+        {{- end }}
+    {{- end }}
+  volumes:
+    - name: agent-state
+      durableDir:
+        size: {{ $root.Values.persistence.home.size | quote }}
+{{- end }}
+{{- end }}

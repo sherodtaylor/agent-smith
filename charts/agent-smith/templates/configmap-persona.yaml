@@ -2,12 +2,14 @@
 {{- $agents := fromJsonArray (include "agent-smith.agentList" .) -}}
 {{- range $i, $agent := $agents }}
 {{- /*
-  Only emit a chart-rendered ConfigMap when configMapRef is unset.
-  When configMapRef IS set, the operator is supplying their own
-  ConfigMap by name; the chart just mounts it (handled by
+  Only emit a chart-rendered ConfigMap when configMapRef is unset AND
+  the agent is in deployment mode. Actor-mode personas are baked into
+  the golden snapshot at ActorTemplate apply time — no live-mount CM.
+  When configMapRef IS set (deployment mode), the operator is supplying
+  their own ConfigMap by name; the chart just mounts it (handled by
   agent-smith.personaConfigMapName helper in statefulset.yaml).
 */ -}}
-{{- if not $agent.configMapRef }}
+{{- if and (not $agent.configMapRef) (eq (include "agent-smith.runtimeFor" (dict "agent" $agent "Values" $root.Values)) "deployment") }}
 {{- if gt $i 0 }}
 ---
 {{- end }}

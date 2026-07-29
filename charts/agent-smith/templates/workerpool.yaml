@@ -1,0 +1,39 @@
+{{- /*
+Agent Substrate WorkerPool — the warm pod fleet that actors multiplex onto.
+
+Only emitted when actor mode is enabled AND at least one persona has
+runtime=actor. Otherwise the chart doesn't touch substrate CRDs at all,
+which keeps `helm install` working on clusters that don't have substrate
+installed.
+
+Spec surface reference: docs/superpowers/specs/2026-07-29-agent-substrate-actor-mode-design.md.
+*/ -}}
+{{- $root := . -}}
+{{- if eq (include "agent-smith.hasActorRuntime" $root) "true" }}
+---
+apiVersion: ate.dev/v1alpha1
+kind: WorkerPool
+metadata:
+  name: {{ .Release.Name }}-pool
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "agent-smith.labels" $root | nindent 4 }}
+    app.kubernetes.io/component: worker-pool
+spec:
+  replicas: {{ .Values.actor.workerPool.replicas }}
+  sandboxClass: {{ .Values.actor.workerPool.sandboxClass | quote }}
+  ateomImage: {{ .Values.actor.workerPool.ateomImage | quote }}
+  template:
+    {{- with .Values.actor.workerPool.nodeSelector }}
+    nodeSelector:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+    {{- with .Values.actor.workerPool.tolerations }}
+    tolerations:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+    {{- with .Values.actor.workerPool.resources }}
+    resources:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+{{- end }}

@@ -1,6 +1,12 @@
 {{- $root := . -}}
 {{- $agents := fromJsonArray (include "agent-smith.agentList" .) -}}
 {{- range $agent := $agents }}
+{{- /*
+  Runtime gate: only emit a StatefulSet for agents in deployment mode.
+  Actor-mode agents render as ActorTemplate via templates/actor-template.yaml.
+  See docs/superpowers/specs/2026-07-29-agent-substrate-actor-mode-design.md.
+*/ -}}
+{{- if eq (include "agent-smith.runtimeFor" (dict "agent" $agent "Values" $root.Values)) "deployment" }}
 ---
 apiVersion: apps/v1
 kind: StatefulSet
@@ -189,4 +195,5 @@ spec:
           requests:
             storage: {{ $root.Values.persistence.workspace.size | quote }}
     {{- end }}
+{{- end }}
 {{- end }}

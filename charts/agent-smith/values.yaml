@@ -24,6 +24,13 @@ agents: []
 #       allowedUsers: "@sherod:lab.sherodtaylor.dev,@devbot:..."
 #     agentRepos: [sherodtaylor/homelab]
 #     primaryRepo: homelab
+#     # runtime: deployment (default) | actor
+#     # Set to `actor` to opt this persona into agent-substrate actor mode.
+#     # Requires `actor.enabled: true` at fleet level (see below). Personas
+#     # without `runtime: actor` continue to render as StatefulSets even when
+#     # actor mode is enabled — the two modes coexist in the same release.
+#     # See docs/superpowers/specs/2026-07-29-agent-substrate-actor-mode-design.md.
+#     runtime: actor
 
 image:
   repository: ghcr.io/sherodtaylor/agent-smith
@@ -126,3 +133,59 @@ quietHours:
 extraEnv: []
 # - name: FOO
 #   value: bar
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Agent Substrate actor mode (opt-in per persona; disabled by default)
+# ─────────────────────────────────────────────────────────────────────────────
+# When `actor.enabled: true` at fleet level AND `agents[].runtime: actor` on
+# a specific persona, that persona renders as a substrate WorkerPool +
+# ActorTemplate pair instead of a StatefulSet. Personas without `runtime:
+# actor` continue to render as StatefulSets — the two modes coexist. When
+# `actor.enabled` is false (default) the actor.* block is entirely ignored.
+#
+# Requires K8s ≥ v1.36 with feature gates ClusterTrustBundle,
+# ClusterTrustBundleProjection, PodCertificateRequest + runtime-config
+# certificates.k8s.io/v1beta1=true. Substrate itself is a prereq — install
+# via upstream `install-ate.sh` before enabling actor mode. See:
+#   docs/superpowers/specs/2026-07-29-agent-substrate-actor-mode-design.md
+actor:
+  enabled: false
+
+  # Substrate worker pool sizing. One pool per release; personas in actor
+  # mode share it. Replicas < persona-count is the whole point (multiplex).
+  workerPool:
+    replicas: 2
+    sandboxClass: gvisor            # gvisor (default) | microvm
+    ateomImage: ko://github.com/agent-substrate/substrate/cmd/ateom-gvisor
+    resources:
+      requests: { cpu: 200m, memory: 512Mi }
+      limits: { memory: 2Gi }
+    nodeSelector: {}
+    tolerations: []
+
+  # Snapshot storage. S3-compatible endpoints work with `usePathStyle: true`
+  # (rustfs, MinIO, SeaweedFS). AWS S3 and GCS use the native SDK path.
+  snapshotStore:
+    backend: s3                     # s3 | gcs
+    endpoint: rustfs.ate-system.svc.cluster.local:9000
+    bucket: agent-smith
+    usePathStyle: true
+    # ExternalSecret / manual Secret projecting AWS_ACCESS_KEY_ID +
+    # AWS_SECRET_ACCESS_KEY into atelet + actor env. Non-empty required
+    # before Phase-2 real actors run (see #117 tech-spec, pmbot #126 review).
+    credentialsSecret: ""
+
+  # HTTP readiness probe on the harness container. When set, substrate's
+  # 20 s golden-snapshot warm-up is skipped — resume returns 200 first try
+  # because the TCP listener is in checkpointed RAM.
+  readyz:
+    enabled: false
+    path: /readyz
+    port: 8081
+
+  # Egress control shape inside the sandbox.
+  #   sidecar — iron-proxy co-located as an ActorTemplate container (default;
+  #             matches today's egress-control semantics).
+  #   atenet — route through atenet's Envoy (deferred; requires atenet
+  #            HTTPForward config we don't ship today).
+  ironProxyMode: sidecar

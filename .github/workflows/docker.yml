@@ -101,8 +101,15 @@ jobs:
         run: |
           set -euo pipefail
           SHORT_SHA="${SUBSTRATE_SHA:0:8}"
+          # ko's `--bare` flag publishes to $KO_DOCKER_REPO exactly, without
+          # appending the import path — needed here because ko's default
+          # namespacing would fold in the full github.com/agent-substrate/...
+          # path. Setting KO_DOCKER_REPO per-binary keeps each image in its
+          # own repo (ghcr.io/sherodtaylor/substrate/<binary>) so the 6
+          # builds don't overwrite each other at a single path.
           for cmd in ateapi atelet atecontroller atenet ateom-gvisor podcertcontroller; do
             echo ">>> publishing substrate/${cmd}"
+            KO_DOCKER_REPO="ghcr.io/sherodtaylor/substrate/${cmd}" \
             ko publish --bare \
               --tags "sha-${SHORT_SHA}" \
               --tags "latest" \

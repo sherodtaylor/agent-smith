@@ -189,3 +189,18 @@ actor:
   #   atenet — route through atenet's Envoy (deferred; requires atenet
   #            HTTPForward config we don't ship today).
   ironProxyMode: sidecar
+
+  # Substrate install shape — D-spike comparison (see
+  # docs/superpowers/specs/2026-07-30-d{1,2,3}-*-spike.md).
+  #   bring-your-own — chart assumes substrate is already present (default;
+  #                    matches tech-spec #117 Path B).
+  #   job            — chart deploys a one-shot Job that kubectl-applies
+  #                    vendored substrate manifests (D2 spike).
+  #   helm-native    — chart directly owns substrate resources via
+  #                    Helm sub-chart (D3 spike; not yet implemented).
+  installMode: bring-your-own
+
+  # Substrate image tag pushed by our CI (docker.yml `substrate` job) to
+  # ghcr.io/sherodtaylor/substrate/<binary>. Bump when substrate SHA bumps.
+  # Only consumed when installMode != bring-your-own.
+  substrateImageTag: sha-46adcb80

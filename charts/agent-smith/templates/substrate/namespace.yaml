@@ -1,0 +1,32 @@
+{{- /*
+D3 spike — helm-native substrate install.
+
+When actor.enabled=true AND actor.installMode=helm-native, chart emits
+substrate resources directly (as first-class Helm templates). Helm owns
+them: `helm rollback` rolls substrate back, `helm diff` shows drift,
+`helm uninstall` tears them down atomically.
+
+This spike ships the plumbing (gates + one placeholder resource per
+substrate manifest we'd need to vendor). Real content follows on Phase 2
+of the spike — full vendoring of substrate's manifests/ate-install/ tree
+translated to Helm templates with ko:// refs replaced by the CI-pushed
+image tags (ghcr.io/sherodtaylor/substrate/<binary>:{{ .Values.actor.substrateImageTag }}).
+
+D3 tradeoffs vs D1/D2 documented in
+docs/superpowers/specs/2026-07-30-d3-helm-native-substrate-spike.md.
+*/ -}}
+{{- if and (default false .Values.actor.enabled) (eq (default "bring-your-own" .Values.actor.installMode) "helm-native") }}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ate-system
+  labels:
+    substrate.ate.dev/managed: "true"
+    installed-by: agent-smith-{{ .Release.Name }}
+    # Helm ownership label — makes it obvious to `kubectl describe` that
+    # substrate's namespace is managed by this chart release, not by a
+    # separate SUC-style install.
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+{{- end }}

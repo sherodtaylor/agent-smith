@@ -32,11 +32,34 @@ Landed under `templates/substrate/`:
 | `atelet.yaml` | `manifests/ate-install/atelet.yaml` | DaemonSet + RBAC. `atelet` image rewritten. |
 | `atenet-router.yaml` | `manifests/ate-install/atenet-router.yaml` | Deployment + Service + ConfigMap + RBAC. `atenet` image rewritten. |
 | `atenet-dns.yaml` | `manifests/ate-install/atenet-dns.yaml` | Deployment (`dns`) + Service + Role/RoleBinding in ate-system AND kube-system. `atenet` image rewritten (dns-controller sidecar). |
+| `pod-certificate-controller.yaml` | `manifests/ate-install/pod-certificate-controller.yaml` | Namespace (`podcertificate-controller-system`) + Deployment + ClusterRole/Binding + Role/RoleBinding. `podcertcontroller` image rewritten. Consumed Secrets (`service-dns-ca-pool`, `pod-identity-ca-pool`) are operator-provisioned — see "Operator-provisioned Secrets" below. |
+| `valkey.yaml` | `manifests/ate-install/valkey.yaml` | ConfigMap + 2 Services (`valkey-cluster`, `valkey-cluster-service`) + StatefulSet (6 replicas) + init Job. Upstream `valkey/valkey:9.1` image (no ko:// rewrite). Consumed Secret (`valkey-ca-certs`) is operator-provisioned. |
+
+### Phase 1 blocker fix (deferral rationale corrected)
+
+An earlier draft of this table listed `pod-certificate-controller.yaml` and `valkey.yaml` as deferred. That was wrong on both counts and blocked the `v0.3.0-rc1` HelmRelease boot in the homelab:
+
+- `ate-api-server` FailedMount on `podidentity` / `servicedns` projected volumes — the PodCertificate credentials come from **substrate's own `podcertcontroller`**, not from the upstream `certificates.k8s.io/v1beta1` API. The deferral note ("requires v1beta1 feature gate") conflated the two — the K8s v1beta1 signer types are only involved insofar as `podcertcontroller` implements them; the controller ships as one of substrate's six binaries and is load-bearing for boot.
+- `ate-api-server` FailedMount on `valkey-ca-certs`, `session-id-ca-pool`, `session-id-jwt-pool` — the apiserver's Redis client cannot init without valkey being reachable; valkey is not optional for the substrate control plane.
+
+Both are now vendored above.
+
+### Operator-provisioned Secrets
+
+Substrate's `install-ate.sh` creates several Secrets at install time via `kubectl-ate admin make-{ca,jwt}-pool` and openssl-derived concatenation. These cannot be helm-rendered (they need real crypto ops on generated CA / JWT signing material) and are NOT included in `templates/substrate/`. Operator must provision them before the HelmRelease rolls out (or install substrate's `kubectl-ate` CLI and run the corresponding create-step against the cluster):
+
+| Secret | Namespace | Created by | Contents |
+|---|---|---|---|
+| `service-dns-ca-pool` | `podcertificate-controller-system` | `create_podcertificate_controller_cas` (`kubectl-ate admin make-ca-pool --ca-id=1 --name=service-dns-ca-pool`) | CA-pool JSON that `podcertcontroller` uses to sign `servicedns.podcert.ate.dev/*` PodCertificateRequests. |
+| `pod-identity-ca-pool` | `podcertificate-controller-system` | `create_podcertificate_controller_cas` (`kubectl-ate admin make-ca-pool --ca-id=1 --name=pod-identity-ca-pool`) | CA-pool JSON for `podidentity.podcert.ate.dev/*` requests. |
+| `session-id-ca-pool` | `ate-system` | `create_session_id_ca_pool_secret` (`kubectl-ate admin make-ca-pool --ca-id=1 --name=session-id-ca-pool`) | Session-ID CA pool consumed by `ate-api-server`. |
+| `session-id-jwt-pool` | `ate-system` | `create_jwt_authority_pool_secret` (`kubectl-ate admin make-jwt-pool --key-id=1 --name=session-id-jwt-pool`) | JWT signing keys for session-ID issuance. |
+| `valkey-ca-certs` | `ate-system` | `create_valkey_ca_certs_secret` (derived — concatenates `RootCertificateDER` PEMs from the two CA pools above) | `ca.crt` — trust bundle for valkey mTLS. Order-dependent: must be created **after** the two CA-pool secrets exist. |
+
+Phase 2 follow-up: package these as an optional install-time Job (D2-style) that runs `kubectl-ate admin` behind the same `actor.installMode=helm-native` gate, or emit them as chart-owned Secrets from a values-supplied CA / signing bundle. Neither is in-scope for this spike.
 
 Deferred (documented follow-ups):
 
-- **`valkey.yaml`** — substrate uses valkey for session storage. Non-trivial (StatefulSet + ExternalSecret for TLS CA + operator-specific storage class). Vendor after the core control plane runs green.
-- **`pod-certificate-controller.yaml`** — SPIFFE-style pod certificate issuance. Requires the `certificates.k8s.io/v1beta1` feature gate documented in `values.yaml`; vendoring gated on cluster support.
 - **`sandboxconfig-gvisor.yaml` + `sandboxconfig-validation.yaml`** — SandboxConfig CRs (not the CRD schema). Better modeled as chart values that emit a chart-owned SandboxConfig than as raw-vendored manifests.
 - **`atenet-router-monitoring.yaml`** — Prometheus PodMonitor. Requires `monitoring.coreos.com` CRDs, which we may or may not have depending on the operator's Prometheus stack. Ship separately behind a `.Values.actor.monitoring.enabled` toggle.
 - **`kind/` + `token-client/`** — dev-cluster helpers, not production substrate.
@@ -52,7 +75,8 @@ No manifests were skipped due to unsupported YAML tags — upstream only uses `@
 
 ## What this spike does NOT do (yet)
 
-- **valkey, pod-certificate-controller, SandboxConfig CRs, PodMonitor** — see "Vendored components → Deferred" above.
+- **SandboxConfig CRs, PodMonitor** — see "Vendored components → Deferred" above.
+- **Runtime-crypto Secrets** (`service-dns-ca-pool`, `pod-identity-ca-pool`, `session-id-ca-pool`, `session-id-jwt-pool`, `valkey-ca-certs`) — see "Operator-provisioned Secrets" above. Operator must run substrate's `kubectl-ate admin make-{ca,jwt}-pool` before the HelmRelease reconciles healthy.
 - **Substrate CRD ownership decision — final call** — Phase 2 lands them as regular templates with `helm.sh/resource-policy: keep`, which preserves CRs across `helm uninstall`. Alternative (Helm's special `crds/` directory, which never upgrades) is worse for our use case: substrate schemas change pre-1.0 and we want `helm upgrade` to bump them. Revisit if we hit CR-loss scenarios.
 - **`values.schema.json`** for the new keys.
 
@@ -85,7 +109,7 @@ No manifests were skipped due to unsupported YAML tags — upstream only uses `@
 
 ## Verification
 
-- [x] `helm template test ./charts/agent-smith --set actor.enabled=true --set actor.installMode=helm-native ...` renders the full substrate control plane. Kind counts (Task #12 promotion): 3 CustomResourceDefinition, 1 Namespace, 4 Deployment, 1 DaemonSet, 5 Service, 7 ServiceAccount, 4 ClusterRole, 5 ClusterRoleBinding, 2 Role, 2 RoleBinding, 3 ConfigMap, 1 PodDisruptionBudget.
+- [x] `helm template test ./charts/agent-smith --set actor.enabled=true --set actor.installMode=helm-native ...` renders the full substrate control plane. Kind counts (Phase 1 blocker fix — podcertcontroller + valkey vendored): 3 CustomResourceDefinition, 2 Namespace (ate-system + podcertificate-controller-system), 5 Deployment (+ podcertcontroller), 1 DaemonSet, 7 Service (+ valkey-cluster, valkey-cluster-service), 7 ServiceAccount, 5 ClusterRole, 6 ClusterRoleBinding, 3 Role, 3 RoleBinding, 4 ConfigMap (+ valkey-config), 1 PodDisruptionBudget, 2 StatefulSet (+ valkey-cluster), 1 Job (valkey-cluster-init).
 - [x] Default rendering (both gates off) does NOT render any substrate resource.
 - [x] `installMode=job` case (D2) does NOT render the D3 templates (the two modes are mutually exclusive per the gate check).
 - [x] All `ko://…/cmd/<binary>` refs replaced with `ghcr.io/sherodtaylor/substrate/<binary>:{{ .Values.actor.substrateImageTag }}` (verified: `ateapi`, `atecontroller`, `atelet`, `atenet` all present in rendered output).

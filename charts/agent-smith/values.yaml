@@ -205,3 +205,10 @@ actor:
   # ghcr.io/sherodtaylor/substrate/<binary>. Bump when substrate SHA bumps.
   # Only consumed when installMode != bring-your-own.
   substrateImageTag: sha-46adcb80
+
+  # Full substrate SHA the images above were built at. Used by the D3
+  # crypto-bootstrap Job (installMode: helm-native) to check out the right
+  # substrate source when it builds kubectl-ate from source. Should track
+  # substrateImageTag — the "sha-<8char>" prefix here is the first 8 chars
+  # of this full SHA.
+  substrateFullSHA: "46adcb8017852fa4e322798828f3b2ea361fc4cf"

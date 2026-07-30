@@ -1,0 +1,148 @@
+{{- if and (default false .Values.actor.enabled) (eq (default "bring-your-own" .Values.actor.installMode) "helm-native") }}
+# Copyright 2026 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# 1. Create Service Account
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: atelet
+  namespace: ate-system
+---
+# 2. Define Permissions
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: atelet
+rules:
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "watch", "list"]
+---
+# 3. Bind Identity to Permissions
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: atelet
+subjects:
+- kind: ServiceAccount
+  name: atelet
+  namespace: ate-system
+roleRef:
+  kind: ClusterRole
+  name: atelet
+  apiGroup: rbac.authorization.k8s.io
+---
+# 4. Create DaemonSet
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: atelet
+  namespace: ate-system
+  labels:
+    app: atelet
+spec:
+  selector:
+    matchLabels:
+      app: atelet
+  template:
+    metadata:
+      labels:
+        app: atelet
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+    spec:
+      serviceAccountName: atelet
+      containers:
+      - name: atelet
+        image: "ghcr.io/sherodtaylor/substrate/atelet:{{ .Values.actor.substrateImageTag }}"
+        args:
+        - --gcp-auth-for-image-pulls=true
+        - --grpc-server-cred-bundle=/run/podidentity.podcert.ate.dev/credential-bundle.pem
+        - --client-ca-certs=/run/podidentity.podcert.ate.dev/trust-bundle.pem
+        # atelet does no mounts, netlink, device, or namespace operations (those
+        # live in the ateom worker pod) — it only reads/writes the
+        # /var/lib/ateom-gvisor hostPath as root, so it needs no Linux
+        # capabilities. (Unpacking arbitrary actor images can require writing into
+        # image-defined read-only dirs; the untar in cmd/atelet/oci.go extracts
+        # directories writable then restores the image's modes, and removal makes
+        # them writable again first, so root suffices without CAP_DAC_OVERRIDE.)
+        # runAsUser is pinned explicitly rather than relying on the base image's
+        # default user.
+        securityContext:
+          runAsUser: 0
+          runAsGroup: 0
+          capabilities:
+            drop:
+            - ALL
+        env:
+        - name: MY_NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: POD_UID
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.uid
+        - name: OTEL_RESOURCE_ATTRIBUTES
+          value: k8s.namespace.name=$(POD_NAMESPACE),k8s.pod.name=$(POD_NAME),k8s.pod.uid=$(POD_UID),service.instance.id=$(POD_UID)
+        - name: OTEL_EXPORTER_OTLP_ENDPOINT
+          value: http://opentelemetry-collector.gke-managed-otel.svc.cluster.local:4317
+        - name: ATE_STORAGE_BACKEND
+          value: "gcs"
+        ports:
+        - name: grpc
+          containerPort: 8085
+          hostPort: 8085
+        - name: prometheus
+          containerPort: 9090
+          hostPort: 9090
+          protocol: TCP
+        volumeMounts:
+        - name: run-ateom
+          mountPath: /var/lib/ateom-gvisor
+        - name: podidentity
+          mountPath: /run/podidentity.podcert.ate.dev
+      volumes:
+      - name: run-ateom
+        hostPath:
+          path: /var/lib/ateom-gvisor
+          type: DirectoryOrCreate
+      # Identity for mutual TLS with the ate-apiserver. atelet is not behind a
+      # Service, so it uses a podidentity (SPIFFE) cert rather than a servicedns
+      # serving cert (which requires DNS SANs it would not have); the
+      # clusterTrustBundle verifies the apiserver's client certificate.
+      - name: podidentity
+        projected:
+          sources:
+          - podCertificate:
+              signerName: podidentity.podcert.ate.dev/identity
+              keyType: ECDSAP256
+              credentialBundlePath: credential-bundle.pem
+          - clusterTrustBundle:
+              signerName: podidentity.podcert.ate.dev/identity
+              labelSelector:
+                matchLabels:
+                  podcert.ate.dev/canarying: live
+              path: trust-bundle.pem
+{{- end }}

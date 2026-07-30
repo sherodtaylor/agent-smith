@@ -13,9 +13,36 @@ Third of three parallel spikes on substrate install-UX bundling (D1 baked-binari
 
 ## What this PR ships
 
-- **`charts/agent-smith/templates/substrate/namespace.yaml`** — first substrate resource (the ate-system Namespace) rendered as a Helm template, gated by the two opt-in flags.
+- **`charts/agent-smith/templates/substrate/`** — full first-pass vendoring of the upstream `manifests/ate-install/` core (see "Vendored components" below). Every file is wrapped in the D3 opt-in gate; `ko://…/cmd/<binary>` refs are rewritten to `ghcr.io/sherodtaylor/substrate/<binary>:{{ .Values.actor.substrateImageTag }}`; CRDs carry `helm.sh/resource-policy: keep` so `helm uninstall` doesn't drop schemas out from under existing CRs.
 - **`charts/agent-smith/values.yaml`** — same `actor.installMode` (`bring-your-own` | `job` | `helm-native`) + `actor.substrateImageTag` additions as D2. The gate values are shared across D2/D3; only the templates differ.
 - **Spike doc** (this file).
+
+### Vendored components (Task #12 promotion)
+
+Landed under `templates/substrate/`:
+
+| File | Upstream source | Notes |
+|---|---|---|
+| `namespace.yaml` | *(chart-authored)* | ate-system Namespace, Helm ownership labels. |
+| `crds/actortemplates-crd.yaml` | `manifests/ate-install/generated/ate.dev_actortemplates.yaml` | resource-policy: keep. |
+| `crds/sandboxconfigs-crd.yaml` | `manifests/ate-install/generated/ate.dev_sandboxconfigs.yaml` | resource-policy: keep. |
+| `crds/workerpools-crd.yaml` | `manifests/ate-install/generated/ate.dev_workerpools.yaml` | resource-policy: keep. |
+| `ate-api-server.yaml` | `manifests/ate-install/ate-api-server.yaml` | Deployment + PDB + Service + RBAC. `ateapi` image rewritten. |
+| `ate-controller.yaml` | `manifests/ate-install/ate-controller.yaml` | Deployment + Service + RBAC. `atecontroller` image rewritten. Upstream declares the ate-system Namespace inline; that block is removed (our `namespace.yaml` owns it). |
+| `atelet.yaml` | `manifests/ate-install/atelet.yaml` | DaemonSet + RBAC. `atelet` image rewritten. |
+| `atenet-router.yaml` | `manifests/ate-install/atenet-router.yaml` | Deployment + Service + ConfigMap + RBAC. `atenet` image rewritten. |
+| `atenet-dns.yaml` | `manifests/ate-install/atenet-dns.yaml` | Deployment (`dns`) + Service + Role/RoleBinding in ate-system AND kube-system. `atenet` image rewritten (dns-controller sidecar). |
+
+Deferred (documented follow-ups):
+
+- **`valkey.yaml`** — substrate uses valkey for session storage. Non-trivial (StatefulSet + ExternalSecret for TLS CA + operator-specific storage class). Vendor after the core control plane runs green.
+- **`pod-certificate-controller.yaml`** — SPIFFE-style pod certificate issuance. Requires the `certificates.k8s.io/v1beta1` feature gate documented in `values.yaml`; vendoring gated on cluster support.
+- **`sandboxconfig-gvisor.yaml` + `sandboxconfig-validation.yaml`** — SandboxConfig CRs (not the CRD schema). Better modeled as chart values that emit a chart-owned SandboxConfig than as raw-vendored manifests.
+- **`atenet-router-monitoring.yaml`** — Prometheus PodMonitor. Requires `monitoring.coreos.com` CRDs, which we may or may not have depending on the operator's Prometheus stack. Ship separately behind a `.Values.actor.monitoring.enabled` toggle.
+- **`kind/` + `token-client/`** — dev-cluster helpers, not production substrate.
+- **Per-resource Helm ownership labels** (`app.kubernetes.io/managed-by`, `app.kubernetes.io/instance` on every substrate resource) — skipped for the spike because upstream resources carry their own `labels:` blocks and drive-by relabelling risks breaking `matchLabels` selectors. Do this via a chart post-render pass in Phase 3.
+
+No manifests were skipped due to unsupported YAML tags — upstream only uses `@env` as plain string content (substrate-runtime substitution), which passes through helm cleanly.
 
 ## Design decisions
 
@@ -25,8 +52,8 @@ Third of three parallel spikes on substrate install-UX bundling (D1 baked-binari
 
 ## What this spike does NOT do (yet)
 
-- **Real substrate manifest set** — only the ate-system Namespace lands. Vendoring the full manifest tree (ate-api-server, ate-controller, atelet DaemonSet, atenet-{dns,router}, pod-certificate-controller, sandboxconfig-gvisor) with `ko://` refs replaced by our CI-pushed tags follows on Phase 2 of the spike. This PR proves the plumbing.
-- **Substrate CRD ownership decision** — CRDs are typically installed as `crds/` in a Helm chart (installed but never upgraded / owned by Helm's crds directory), or as regular templates (Helm owns them but crd-updates need care). Deferred; Phase 2.
+- **valkey, pod-certificate-controller, SandboxConfig CRs, PodMonitor** — see "Vendored components → Deferred" above.
+- **Substrate CRD ownership decision — final call** — Phase 2 lands them as regular templates with `helm.sh/resource-policy: keep`, which preserves CRs across `helm uninstall`. Alternative (Helm's special `crds/` directory, which never upgrades) is worse for our use case: substrate schemas change pre-1.0 and we want `helm upgrade` to bump them. Revisit if we hit CR-loss scenarios.
 - **`values.schema.json`** for the new keys.
 
 ## Tradeoffs (for the D1/D2/D3 comparison)
@@ -58,8 +85,10 @@ Third of three parallel spikes on substrate install-UX bundling (D1 baked-binari
 
 ## Verification
 
-- [x] `helm template test ./charts/agent-smith --set actor.enabled=true --set actor.installMode=helm-native ...` renders the ate-system Namespace with the ownership labels.
+- [x] `helm template test ./charts/agent-smith --set actor.enabled=true --set actor.installMode=helm-native ...` renders the full substrate control plane. Kind counts (Task #12 promotion): 3 CustomResourceDefinition, 1 Namespace, 4 Deployment, 1 DaemonSet, 5 Service, 7 ServiceAccount, 4 ClusterRole, 5 ClusterRoleBinding, 2 Role, 2 RoleBinding, 3 ConfigMap, 1 PodDisruptionBudget.
 - [x] Default rendering (both gates off) does NOT render any substrate resource.
 - [x] `installMode=job` case (D2) does NOT render the D3 templates (the two modes are mutually exclusive per the gate check).
+- [x] All `ko://…/cmd/<binary>` refs replaced with `ghcr.io/sherodtaylor/substrate/<binary>:{{ .Values.actor.substrateImageTag }}` (verified: `ateapi`, `atecontroller`, `atelet`, `atenet` all present in rendered output).
+- [x] All 3 CRDs carry `helm.sh/resource-policy: keep`.
 - [ ] Post-merge (chart CI on tag push): renders cleanly against the packaged chart.
-- [ ] Phase 2 followup: vendor real substrate manifests, verify substrate control plane comes up Running under Helm ownership + `helm rollback` rolls it back cleanly.
+- [ ] Phase 3 followup: apply against a live cluster, verify substrate control plane comes up Running under Helm ownership + `helm rollback` rolls it back cleanly. Vendor the deferred components (valkey, pod-certificate-controller, atenet-router-monitoring).

@@ -212,3 +212,12 @@ actor:
   # substrateImageTag — the "sha-<8char>" prefix here is the first 8 chars
   # of this full SHA.
   substrateFullSHA: "46adcb8017852fa4e322798828f3b2ea361fc4cf"
+
+  # NodeSelector for the D3 crypto-bootstrap Job. The Job image
+  # (golang:1.25-bookworm + apt install + go install kubectl-ate) is heavy
+  # enough to trigger DiskPressure eviction on constrained nodes. Default
+  # pins to `k3s-server` — override for non-k3s clusters. Set to {} to
+  # remove the constraint (only safe once the follow-up pre-built
+  # bootstrap image lands).
+  bootstrapNodeSelector:
+    kubernetes.io/hostname: k3s-server

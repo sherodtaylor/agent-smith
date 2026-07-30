@@ -107,6 +107,16 @@ spec:
     spec:
       restartPolicy: OnFailure
       serviceAccountName: {{ .Release.Name }}-substrate-bootstrap
+      # The Job image (golang:1.25-bookworm ~800 MB + apt install + go
+      # install kubectl-ate) is heavy enough to trigger DiskPressure
+      # eviction on nodes with low ephemeral-storage headroom. Pin to a
+      # user-selectable node (default: control-plane, which typically has
+      # more headroom than pressured agent nodes). Follow-up: replace with
+      # a pre-built ~50 MB image so this Job runs anywhere.
+      {{- with (default (dict "kubernetes.io/hostname" "k3s-server") .Values.actor.bootstrapNodeSelector) }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       containers:
         - name: bootstrap
           image: "golang:1.25-bookworm"

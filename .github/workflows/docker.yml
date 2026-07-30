@@ -56,6 +56,59 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+  substrate:
+    # Build + publish agent-substrate binaries as OCI images to
+    # ghcr.io/sherodtaylor/substrate/<binary>. Consumed by chart-side
+    # actor-mode install paths (D2/D3 spikes) so operators don't need
+    # to build substrate themselves. Substrate publishes zero prebuilt
+    # images upstream (verified 2026-07-30), so this is where they come
+    # from for anyone consuming our chart.
+    #
+    # Pins to SUBSTRATE_SHA — bump by editing the env var + re-running
+    # the workflow. Same GITHUB_TOKEN handles the push; no extra secret.
+    name: Build + push substrate images
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    env:
+      SUBSTRATE_SHA: 46adcb8017852fa4e322798828f3b2ea361fc4cf
+      KO_DOCKER_REPO: ghcr.io/sherodtaylor/substrate
+    steps:
+      - name: Checkout agent-substrate at pinned SHA
+        uses: actions/checkout@v4
+        with:
+          repository: agent-substrate/substrate
+          ref: ${{ env.SUBSTRATE_SHA }}
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Set up ko
+        uses: ko-build/setup-ko@v0.9
+        with:
+          version: v0.18.0
+
+      - name: Log in to ghcr.io
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" \
+            | ko login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Publish substrate images
+        run: |
+          set -euo pipefail
+          SHORT_SHA="${SUBSTRATE_SHA:0:8}"
+          for cmd in ateapi atelet atecontroller atenet ateom-gvisor podcertcontroller; do
+            echo ">>> publishing substrate/${cmd}"
+            ko publish --bare \
+              --tags "sha-${SHORT_SHA}" \
+              --tags "latest" \
+              "./cmd/${cmd}"
+          done
+
   chart:
     name: Package + publish Helm chart
     if: startsWith(github.ref, 'refs/tags/v')

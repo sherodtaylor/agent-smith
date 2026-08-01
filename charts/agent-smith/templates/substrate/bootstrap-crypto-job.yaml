@@ -119,7 +119,7 @@ spec:
       {{- end }}
       containers:
         - name: bootstrap
-          image: "golang:1.25-bookworm"
+          image: "golang:1.26-bookworm"
           env:
             - name: SUBSTRATE_SHA
               value: {{ .Values.actor.substrateFullSHA | quote }}
@@ -215,7 +215,7 @@ spec:
                 ca_certs=$(printf '%s\n%s\n' "${servicedns_root}" "${podidentity_root}")
                 kubectl create secret generic valkey-ca-certs \
                   --namespace=ate-system \
-                  --from-literal=tls-ca-cert-file="${ca_certs}"
+                  --from-literal="ca.crt=${ca_certs}"
               fi
 
               # ---------------------------------------------------------------
@@ -228,9 +228,10 @@ spec:
               echo "==> ensuring ate-api-server-envvars ConfigMap (ate-system)"
               kubectl create configmap ate-api-server-envvars \
                 --namespace=ate-system \
-                --from-literal=REDIS_ADDRESS="valkey-cluster.ate-system.svc:6379" \
+                --from-literal=REDIS_CLUSTER_ADDRESS="valkey-cluster.ate-system.svc:6379" \
                 --from-literal=REDIS_USE_IAM_AUTH="false" \
-                --from-literal=REDIS_TLS_SERVER_NAME="" \
+                --from-literal=REDIS_TLS_SERVER_NAME="valkey-cluster.ate-system.svc" \
+                --from-literal=REDIS_CLIENT_CERT="/run/podidentity.podcert.ate.dev/credential-bundle.pem" \
                 --dry-run=client -o yaml | kubectl apply -f -
 
               echo "==> bootstrap complete"

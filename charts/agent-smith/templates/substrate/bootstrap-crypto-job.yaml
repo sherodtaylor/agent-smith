@@ -141,8 +141,11 @@ spec:
 
               # Ensure both namespaces exist (main install templates create
               # them, but pre-install hook fires first).
+              # Use get||create rather than dry-run|apply: apply tries to PATCH
+              # the namespace annotation on existing namespaces, which requires
+              # patch permission the bootstrap SA doesn't have.
               for ns in ate-system podcertificate-controller-system; do
-                kubectl create namespace "${ns}" --dry-run=client -o yaml | kubectl apply -f -
+                kubectl get namespace "${ns}" >/dev/null 2>&1 || kubectl create namespace "${ns}"
               done
 
               echo "==> cloning substrate @ ${SUBSTRATE_SHA}"

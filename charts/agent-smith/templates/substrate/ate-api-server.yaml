@@ -92,12 +92,12 @@ spec:
         args:
           - "--grpc-listen-addr=0.0.0.0:443"
           - "--grpc-server-cred-bundle=/run/servicedns.podcert.ate.dev/credential-bundle.pem"
-          - --redis-cluster-address=@env
+          - --redis-cluster-address=$(REDIS_CLUSTER_ADDRESS)
           - --redis-ca-certs=/etc/valkey-ca/ca.crt
-          - --redis-use-iam-auth=@env
-          - --redis-tls-server-name=@env
-          - --redis-client-cert=@env
-          - --client-jwt-issuer=@env
+          - --redis-use-iam-auth=$(REDIS_USE_IAM_AUTH)
+          - --redis-tls-server-name=$(REDIS_TLS_SERVER_NAME)
+          - --redis-client-cert=$(REDIS_CLIENT_CERT)
+          - --client-jwt-issuer=$(CLIENT_JWT_ISSUER)
           - --client-jwt-audience=api.ate-system.svc
           - --session-id-jwt-pool=/run/session-id-jwt-pool/pool.json
           - --session-id-ca-pool=/run/session-id-ca-pool/pool.json
@@ -123,10 +123,40 @@ spec:
           value: k8s.namespace.name=$(POD_NAMESPACE),k8s.pod.name=$(POD_NAME),k8s.pod.uid=$(POD_UID),service.instance.id=$(POD_UID)
         - name: OTEL_EXPORTER_OTLP_ENDPOINT
           value: http://opentelemetry-collector.gke-managed-otel.svc.cluster.local:4317
-        # Inject env vars from a ConfigMap created by each developer.  This lets
-        # each developer customize their own redis address, etc, without having
-        # to edit this manifest, which can remain constant across all
-        # developers.
+        # Inject env vars from ate-api-server-envvars ConfigMap into the
+        # container env so Kubernetes $(VAR_NAME) substitution in args works.
+        # envFrom alone does not support $(VAR_NAME) substitution in args;
+        # explicit valueFrom entries are required.
+        - name: REDIS_CLUSTER_ADDRESS
+          valueFrom:
+            configMapKeyRef:
+              name: ate-api-server-envvars
+              key: REDIS_CLUSTER_ADDRESS
+              optional: true
+        - name: REDIS_USE_IAM_AUTH
+          valueFrom:
+            configMapKeyRef:
+              name: ate-api-server-envvars
+              key: REDIS_USE_IAM_AUTH
+              optional: true
+        - name: REDIS_TLS_SERVER_NAME
+          valueFrom:
+            configMapKeyRef:
+              name: ate-api-server-envvars
+              key: REDIS_TLS_SERVER_NAME
+              optional: true
+        - name: REDIS_CLIENT_CERT
+          valueFrom:
+            configMapKeyRef:
+              name: ate-api-server-envvars
+              key: REDIS_CLIENT_CERT
+              optional: true
+        - name: CLIENT_JWT_ISSUER
+          valueFrom:
+            configMapKeyRef:
+              name: ate-api-server-envvars
+              key: CLIENT_JWT_ISSUER
+              optional: true
         envFrom:
         - configMapRef:
             name: ate-api-server-envvars

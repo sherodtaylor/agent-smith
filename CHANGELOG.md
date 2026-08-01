@@ -19,6 +19,16 @@ cut-a-release procedure.
 
 ## [Unreleased]
 
+### Fixed
+
+- **substrate bootstrap: switch ate-api-server from `@env` args to Kubernetes
+  `$(VAR_NAME)` substitution.** The binary does not implement `@env` env-var
+  resolution, so flag values were silently empty, causing the server to attempt
+  Google IAM auth and crash. Replaced `--redis-use-iam-auth=@env` (and sibling
+  flags) with `$(REDIS_USE_IAM_AUTH)` etc., and added explicit
+  `env.valueFrom.configMapKeyRef` entries for each flag (required for
+  Kubernetes arg substitution to work alongside `envFrom`).
+
 ---
 
 ## [0.2.22] - 2026-06-09

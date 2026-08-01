@@ -28,6 +28,11 @@ cut-a-release procedure.
   flags) with `$(REDIS_USE_IAM_AUTH)` etc., and added explicit
   `env.valueFrom.configMapKeyRef` entries for each flag (required for
   Kubernetes arg substitution to work alongside `envFrom`).
+- **substrate bootstrap: add `CLIENT_JWT_ISSUER=""` to ate-api-server-envvars
+  ConfigMap.** Without this key, `$(CLIENT_JWT_ISSUER)` in the Deployment args
+  cannot be substituted and passes as a literal string. Added as an empty entry
+  so the flag resolves to empty (matching the expected no-JWT-issuer behavior
+  for self-hosted installs).
 
 ---
 

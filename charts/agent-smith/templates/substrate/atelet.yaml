@@ -69,7 +69,7 @@ spec:
       - name: atelet
         image: "ghcr.io/sherodtaylor/substrate/atelet:{{ .Values.actor.substrateImageTag }}"
         args:
-        - --gcp-auth-for-image-pulls=true
+        - --gcp-auth-for-image-pulls={{ if eq .Values.actor.snapshotStore.backend "gcs" }}true{{ else }}false{{ end }}
         - --grpc-server-cred-bundle=/run/podidentity.podcert.ate.dev/credential-bundle.pem
         - --client-ca-certs=/run/podidentity.podcert.ate.dev/trust-bundle.pem
         # atelet does no mounts, netlink, device, or namespace operations (those
@@ -109,7 +109,15 @@ spec:
         - name: OTEL_EXPORTER_OTLP_ENDPOINT
           value: http://opentelemetry-collector.gke-managed-otel.svc.cluster.local:4317
         - name: ATE_STORAGE_BACKEND
-          value: "gcs"
+          value: {{ .Values.actor.snapshotStore.backend | quote }}
+        {{- if eq .Values.actor.snapshotStore.backend "s3" }}
+        - name: ATE_STORAGE_ENDPOINT
+          value: {{ printf "http://%s" .Values.actor.snapshotStore.endpoint | quote }}
+        - name: ATE_STORAGE_ACCESS_KEY
+          value: "minioadmin"
+        - name: ATE_STORAGE_SECRET_KEY
+          value: "minioadmin"
+        {{- end }}
         ports:
         - name: grpc
           containerPort: 8085

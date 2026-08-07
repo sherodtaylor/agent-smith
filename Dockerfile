@@ -15,6 +15,32 @@ COPY cmd/claude-reauth/ .
 # go mod tidy generates go.sum at build time (requires network access in CI).
 RUN go mod tidy && CGO_ENABLED=0 go build -o /out/claude-reauth .
 
+# ---- stage 2b: D1 spike — bake agent-substrate binaries ----
+# Substrate ships zero prebuilt images (verified 2026-07-30 — zero GHCR
+# packages, single tagged release with no assets). D1 spike builds all 6
+# binaries into the runtime image; substrate manifests are then patched
+# at install time to reference ghcr.io/sherodtaylor/agent-smith:<tag>
+# with different `command: [...]` entries per component.
+#
+# Substrate SHA pinned to a specific commit for reproducibility; bump by
+# updating SUBSTRATE_SHA + re-running the CI build.
+FROM golang:1.25-bookworm AS substrate-builder
+ARG SUBSTRATE_SHA=46adcb8017852fa4e322798828f3b2ea361fc4cf
+RUN git clone https://github.com/agent-substrate/substrate.git /src
+WORKDIR /src
+RUN git checkout "${SUBSTRATE_SHA}"
+RUN mkdir -p /out && \
+    for cmd in ateapi atelet atecontroller atenet ateom-gvisor podcertcontroller; do \
+      echo ">>> building substrate/cmd/${cmd}"; \
+      CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -X main.substrateSHA=${SUBSTRATE_SHA}" \
+        -o "/out/${cmd}" "./cmd/${cmd}"; \
+    done
+# Vendor the manifests + install script so D1-mode installers don't need
+# to re-clone substrate at runtime.
+RUN cp -r manifests /out/manifests && \
+    cp -r hack /out/hack && \
+    echo "${SUBSTRATE_SHA}" > /out/SUBSTRATE_SHA
+
 # ---- stage 3: runtime ----
 FROM debian:bookworm-slim
 
@@ -65,6 +91,24 @@ RUN curl -fsSL https://bun.sh/install | bash
 # Binaries from build stages
 COPY --from=mcp-nats-builder /out/mcp-nats /usr/local/bin/mcp-nats
 COPY --from=reauth-builder   /out/claude-reauth /usr/local/bin/claude-reauth
+
+# D1 spike: substrate binaries + vendored manifests. The runtime image now
+# doubles as the substrate component image — chart install patches manifests
+# to use `image: <this-image>` + `command: ["/usr/local/bin/<component>"]`
+# instead of substrate's default `ko://...` refs.
+#
+# Keep separate from the agent-smith harness path: the harness entrypoint
+# stays `/opt/agent-smith/scripts/entrypoint.sh`; substrate components run
+# via explicit `command:` overrides so nothing shifts by accident.
+COPY --from=substrate-builder /out/ateapi              /usr/local/bin/ateapi
+COPY --from=substrate-builder /out/atelet              /usr/local/bin/atelet
+COPY --from=substrate-builder /out/atecontroller       /usr/local/bin/atecontroller
+COPY --from=substrate-builder /out/atenet              /usr/local/bin/atenet
+COPY --from=substrate-builder /out/ateom-gvisor        /usr/local/bin/ateom-gvisor
+COPY --from=substrate-builder /out/podcertcontroller   /usr/local/bin/podcertcontroller
+COPY --from=substrate-builder /out/manifests           /opt/agent-smith/substrate/manifests
+COPY --from=substrate-builder /out/hack                /opt/agent-smith/substrate/hack
+COPY --from=substrate-builder /out/SUBSTRATE_SHA       /opt/agent-smith/substrate/SUBSTRATE_SHA
 
 # chromedp uses the system Chromium; point it at the Debian package path
 ENV CHROMEDP_CHROME_PATH=/usr/bin/chromium

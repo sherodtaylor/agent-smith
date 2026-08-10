@@ -1,0 +1,30 @@
+{{- /*
+Cluster-scoped default SandboxConfig for the WorkerPool's sandboxClass.
+
+Without this, ate-controller refuses ResumeGoldenActor:
+  "no default SandboxConfig for class \"gvisor\"; set one with
+   spec.default=true or name one via WorkerPool.spec.sandboxConfigName"
+
+Vendored from upstream manifests/ate-install/sandboxconfig-gvisor.yaml at
+pinned SHA 46adcb8. The gs:// URLs are gvisor's public release bucket —
+downstream egress control must allow storage.googleapis.com for the nodes'
+atelet (iron-proxy allowlist in the reference deployment).
+
+Emitted only in helm-native install mode: bring-your-own and job installs
+are expected to ship their own SandboxConfig alongside substrate itself.
+*/ -}}
+{{- if and (default false .Values.actor.enabled) (eq (default "bring-your-own" .Values.actor.installMode) "helm-native") (default true .Values.actor.sandboxConfig.enabled) }}
+---
+apiVersion: ate.dev/v1alpha1
+kind: SandboxConfig
+metadata:
+  name: {{ .Values.actor.sandboxConfig.name | quote }}
+  labels:
+    {{- include "agent-smith.labels" . | nindent 4 }}
+    app.kubernetes.io/component: sandbox-config
+spec:
+  sandboxClass: {{ .Values.actor.workerPool.sandboxClass | quote }}
+  default: {{ .Values.actor.sandboxConfig.default }}
+  assets:
+    {{- toYaml .Values.actor.sandboxConfig.assets | nindent 4 }}
+{{- end }}

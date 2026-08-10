@@ -175,6 +175,26 @@ actor:
     # before Phase-2 real actors run (see #117 tech-spec, pmbot #126 review).
     credentialsSecret: ""
 
+  # Cluster-scoped default SandboxConfig for the WorkerPool's sandboxClass.
+  # ate-controller refuses ResumeGoldenActor without one ("no default
+  # SandboxConfig for class \"gvisor\"; set one with spec.default=true or
+  # name one via WorkerPool.spec.sandboxConfigName"). Vendored from upstream
+  # manifests/ate-install/sandboxconfig-gvisor.yaml @ 46adcb8. Only emitted
+  # in helm-native install mode; bring-your-own installs supply their own.
+  sandboxConfig:
+    enabled: true
+    name: gvisor-default
+    default: true
+    assets:
+      amd64:
+        runsc:
+          url: "gs://gvisor/releases/release/20260622/x86_64/runsc"
+          sha256: "f18a948bf9c8bbb54eb998549a3a8d719a1c7de2efbe8fdd2ff0ee5fecd06f19"
+      arm64:
+        runsc:
+          url: "gs://gvisor/releases/release/20260622/aarch64/runsc"
+          sha256: "62eee121f8c188e347c428acc96f111568ede3be37b906046b6f28bbe2cc40c0"
+
   # HTTP readiness probe on the harness container. When set, substrate's
   # 20 s golden-snapshot warm-up is skipped — resume returns 200 first try
   # because the TCP listener is in checkpointed RAM.

@@ -6,6 +6,13 @@ runtime=actor. Otherwise the chart doesn't touch substrate CRDs at all,
 which keeps `helm install` working on clusters that don't have substrate
 installed.
 
+KNOWN LIMITATION (upstream substrate #819): WorkerPool.spec.template
+accepts only nodeAffinity/nodeSelector/priorityClassName/resources/
+tolerations — no topologySpreadConstraints or podAntiAffinity. The
+scheduler may co-locate all worker pods on one node, so a single-node
+failure can take out every actor. Until upstream adds a spread field,
+size replicas accordingly and monitor pod placement.
+
 Spec surface reference: docs/superpowers/specs/2026-07-29-agent-substrate-actor-mode-design.md.
 */ -}}
 {{- $root := . -}}

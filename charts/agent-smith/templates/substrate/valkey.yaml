@@ -115,6 +115,10 @@ spec:
           POD_DNS="${HOSTNAME}.valkey-cluster-service.ate-system.svc"
           cp /etc/valkey/valkey.conf /tmp/valkey.conf
           {
+            # The ConfigMap-rendered conf may lack a trailing newline;
+            # without this guard the first appended directive glues onto
+            # "protected-mode no" and valkey exits with a config error.
+            echo ""
             echo "cluster-announce-hostname ${POD_DNS}"
             echo "cluster-announce-tls-port 6379"
             echo "cluster-announce-bus-port 16379"

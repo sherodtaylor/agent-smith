@@ -182,6 +182,15 @@ kind: Job
 metadata:
   name: valkey-cluster-init
   namespace: ate-system
+  annotations:
+    # Re-run the init/repair check on every install and upgrade. Without
+    # this the job runs exactly once per release lifetime, and a cluster
+    # that loses quorum after node churn (stale nodes.conf peers) stays
+    # CLUSTERDOWN forever with no declarative path back — see the
+    # 2026-08 outage where all 6 nodes restarted with fresh IPs.
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-delete-policy: before-hook-creation
+    helm.sh/hook-weight: "5"
 spec:
   template:
     metadata:
@@ -229,6 +238,26 @@ spec:
           INIT_STATUS=$(valkey-cli --tls --cacert /etc/valkey-ca/ca.crt --cert /run/podidentity.podcert.ate.dev/credential-bundle.pem --key /run/podidentity.podcert.ate.dev/credential-bundle.pem -h valkey-cluster-0.valkey-cluster-service.ate-system.svc cluster info 2>/dev/null | grep cluster_state || true)
 
           if [ -z "${INIT_STATUS}" ] || ! echo "${INIT_STATUS}" | grep -q "cluster_state:ok"; then
+            echo "Cluster state not ok — resetting nodes before (re-)create..."
+            # Substrate uses valkey as a session/worker cache; when the
+            # cluster has lost quorum (e.g. every node restarted and the
+            # persisted nodes.conf peers are stale), the cached state is
+            # already invalid, so a flush + hard reset per node followed
+            # by a fresh cluster create is the correct repair. No-ops on
+            # empty first-install nodes.
+            for i in 0 1 2 3 4 5; do
+              H="valkey-cluster-${i}.valkey-cluster-service.ate-system.svc"
+              valkey-cli --tls \
+                --cacert /etc/valkey-ca/ca.crt \
+                --cert /run/podidentity.podcert.ate.dev/credential-bundle.pem \
+                --key /run/podidentity.podcert.ate.dev/credential-bundle.pem \
+                -h "${H}" flushall || true
+              valkey-cli --tls \
+                --cacert /etc/valkey-ca/ca.crt \
+                --cert /run/podidentity.podcert.ate.dev/credential-bundle.pem \
+                --key /run/podidentity.podcert.ate.dev/credential-bundle.pem \
+                -h "${H}" cluster reset hard || true
+            done
             echo "Initializing Valkey cluster..."
             valkey-cli --tls \
               --cacert /etc/valkey-ca/ca.crt \

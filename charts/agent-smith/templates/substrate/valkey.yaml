@@ -188,7 +188,12 @@ metadata:
     # that loses quorum after node churn (stale nodes.conf peers) stays
     # CLUSTERDOWN forever with no declarative path back — see the
     # 2026-08 outage where all 6 nodes restarted with fresh IPs.
-    helm.sh/hook: post-install,post-upgrade
+    #
+    # pre-upgrade (not post-upgrade) on purpose: helm's readiness wait
+    # blocks on ate-api-server, which cannot become healthy while the
+    # cluster is down — a post-upgrade hook never gets to run in exactly
+    # the scenario it exists to repair.
+    helm.sh/hook: post-install,pre-upgrade
     helm.sh/hook-delete-policy: before-hook-creation
     helm.sh/hook-weight: "5"
 spec:

@@ -151,7 +151,7 @@ spec:
               done
 
               echo "==> cloning substrate @ ${SUBSTRATE_SHA}"
-              git clone --quiet https://github.com/agent-substrate/substrate /src
+              git clone --quiet {{ .Values.actor.substrateRepo }} /src
               cd /src && git -c advice.detachedHead=false checkout "${SUBSTRATE_SHA}"
 
               echo "==> building kubectl-ate"

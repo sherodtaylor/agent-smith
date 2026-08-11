@@ -14,7 +14,7 @@
 # limitations under the License.
 
 # NOTE: Vendored from upstream manifests/ate-install/pod-certificate-controller.yaml
-# at pinned SHA 46adcb8. Substrate's own controller — issues the PodCertificate
+# at pinned SHA 46adcb8 (verified unchanged at 231a9ef1). Substrate's own controller — issues the PodCertificate
 # credentials (servicedns / podidentity) that ate-api-server, ate-controller,
 # atenet-router, and valkey mount as projected volumes. Load-bearing for boot.
 # The `service-dns-ca-pool` and `pod-identity-ca-pool` Secrets it consumes are

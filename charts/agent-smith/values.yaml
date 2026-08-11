@@ -226,14 +226,21 @@ actor:
   # Substrate image tag pushed by our CI (docker.yml `substrate` job) to
   # ghcr.io/sherodtaylor/substrate/<binary>. Bump when substrate SHA bumps.
   # Only consumed when installMode != bring-your-own.
-  substrateImageTag: sha-231a9ef1
+  substrateImageTag: sha-b65e2663
+
+  # Git repo the substrate source is cloned from (crypto-bootstrap Job)
+  # and built from (docker.yml). Currently a downstream fork: upstream
+  # 231a9ef1 + the agent-substrate/substrate#818 suspend-race fix
+  # (u10-fix branch). Revert to https://github.com/agent-substrate/substrate
+  # once #818 is fixed upstream.
+  substrateRepo: https://github.com/sherodtaylor/substrate
 
   # Full substrate SHA the images above were built at. Used by the D3
   # crypto-bootstrap Job (installMode: helm-native) to check out the right
   # substrate source when it builds kubectl-ate from source. Should track
   # substrateImageTag — the "sha-<8char>" prefix here is the first 8 chars
-  # of this full SHA.
-  substrateFullSHA: "231a9ef189a881c6b7f9ae12fb81db86447537e4"
+  # of this full SHA. Must exist in substrateRepo.
+  substrateFullSHA: "b65e2663644513a410e04af5f31a313c9caaa9f4"
 
   # OTLP exporter endpoint written into the vendored ate-otel-config
   # ConfigMap (consumed via envFrom by all four substrate control-plane

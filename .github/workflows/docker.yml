@@ -66,19 +66,25 @@ jobs:
     #
     # Pins to SUBSTRATE_SHA — bump by editing the env var + re-running
     # the workflow. Same GITHUB_TOKEN handles the push; no extra secret.
+    #
+    # SUBSTRATE_REPO currently points at our downstream fork: upstream
+    # 231a9ef1 + the agent-substrate/substrate#818 suspend-race fix
+    # (u10-fix branch). Revert to agent-substrate/substrate once #818
+    # is fixed upstream.
     name: Build + push substrate images
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
     env:
-      SUBSTRATE_SHA: 46adcb8017852fa4e322798828f3b2ea361fc4cf
+      SUBSTRATE_REPO: sherodtaylor/substrate
+      SUBSTRATE_SHA: b65e2663644513a410e04af5f31a313c9caaa9f4
       KO_DOCKER_REPO: ghcr.io/sherodtaylor/substrate
     steps:
-      - name: Checkout agent-substrate at pinned SHA
+      - name: Checkout substrate at pinned SHA
         uses: actions/checkout@v4
         with:
-          repository: agent-substrate/substrate
+          repository: ${{ env.SUBSTRATE_REPO }}
           ref: ${{ env.SUBSTRATE_SHA }}
 
       - name: Set up Go

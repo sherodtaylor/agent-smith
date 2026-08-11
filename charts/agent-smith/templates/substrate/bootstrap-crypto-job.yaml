@@ -14,7 +14,9 @@ It:
   1. Builds kubectl-ate from source at the pinned SUBSTRATE_SHA.
   2. Runs the 4 `kubectl-ate admin make-*-pool` invocations (from
      substrate's own hack/install-ate.sh, functions
-     create_{jwt_authority,session_id_ca,podcertificate_controller_cas}_pool_secret).
+     create_{jwt_authority,actor_id_ca,podcertificate_controller_cas}_pool_secret).
+     Upstream renamed session-id-{jwt,ca}-pool to actor-id-{jwt,ca}-pool
+     at 231a9ef1; the names below track the pinned SHA.
   3. Extracts the two podcert CA-pool root PEMs, concats them into the
      `valkey-ca-certs` Secret (substrate's ca_pool_root_pem helper).
   4. Creates the ate-api-server-envvars ConfigMap (create_api_server_env_vars).
@@ -149,7 +151,7 @@ spec:
               done
 
               echo "==> cloning substrate @ ${SUBSTRATE_SHA}"
-              git clone --quiet https://github.com/agent-substrate/substrate /src
+              git clone --quiet {{ .Values.actor.substrateRepo }} /src
               cd /src && git -c advice.detachedHead=false checkout "${SUBSTRATE_SHA}"
 
               echo "==> building kubectl-ate"
@@ -161,18 +163,18 @@ spec:
               # ensure_apiserver_prerequisites — `get` first, `make-*` only if 404.
               # ---------------------------------------------------------------
 
-              echo "==> ensuring session-id-jwt-pool (ate-system)"
-              kubectl get secret -n ate-system session-id-jwt-pool >/dev/null 2>&1 || \
+              echo "==> ensuring actor-id-jwt-pool (ate-system)"
+              kubectl get secret -n ate-system actor-id-jwt-pool >/dev/null 2>&1 || \
                 kubectl-ate admin make-jwt-pool \
                   --key-id="1" \
-                  --name="session-id-jwt-pool" \
+                  --name="actor-id-jwt-pool" \
                   --secret-namespace=ate-system
 
-              echo "==> ensuring session-id-ca-pool (ate-system)"
-              kubectl get secret -n ate-system session-id-ca-pool >/dev/null 2>&1 || \
+              echo "==> ensuring actor-id-ca-pool (ate-system)"
+              kubectl get secret -n ate-system actor-id-ca-pool >/dev/null 2>&1 || \
                 kubectl-ate admin make-ca-pool \
                   --ca-id="1" \
-                  --name="session-id-ca-pool" \
+                  --name="actor-id-ca-pool" \
                   --secret-namespace=ate-system
 
               echo "==> ensuring service-dns-ca-pool (podcertificate-controller-system)"

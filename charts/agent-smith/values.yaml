@@ -179,21 +179,23 @@ actor:
   # ate-controller refuses ResumeGoldenActor without one ("no default
   # SandboxConfig for class \"gvisor\"; set one with spec.default=true or
   # name one via WorkerPool.spec.sandboxConfigName"). Vendored from upstream
-  # manifests/ate-install/sandboxconfig-gvisor.yaml @ 46adcb8. Only emitted
+  # manifests/ate-install/sandboxconfig-gvisor.yaml @ 231a9ef1. Only emitted
   # in helm-native install mode; bring-your-own installs supply their own.
+  # As of 231a9ef1 atelet fetches the full gVisor release tarball ("gvisor"
+  # asset, gvisor.tar.bz2) instead of the bare "runsc" binary.
   sandboxConfig:
     enabled: true
     name: gvisor-default
     default: true
     assets:
       amd64:
-        runsc:
-          url: "gs://gvisor/releases/release/20260622/x86_64/runsc"
-          sha256: "f18a948bf9c8bbb54eb998549a3a8d719a1c7de2efbe8fdd2ff0ee5fecd06f19"
+        gvisor:
+          url: "gs://gvisor/releases/release/20260803/x86_64/gvisor.tar.bz2"
+          sha256: "9e7a5fcc2cbd28c9cd4af910a9327abcf07a8efcce242c285b860d79010c2db5"
       arm64:
-        runsc:
-          url: "gs://gvisor/releases/release/20260622/aarch64/runsc"
-          sha256: "62eee121f8c188e347c428acc96f111568ede3be37b906046b6f28bbe2cc40c0"
+        gvisor:
+          url: "gs://gvisor/releases/release/20260803/aarch64/gvisor.tar.bz2"
+          sha256: "294d54dea2a18bcd2614a4b5072d6f32f0e8938f9e6e71c9e86b843c4a7b707b"
 
   # HTTP readiness probe on the harness container. When set, substrate's
   # 20 s golden-snapshot warm-up is skipped — resume returns 200 first try
@@ -224,14 +226,20 @@ actor:
   # Substrate image tag pushed by our CI (docker.yml `substrate` job) to
   # ghcr.io/sherodtaylor/substrate/<binary>. Bump when substrate SHA bumps.
   # Only consumed when installMode != bring-your-own.
-  substrateImageTag: sha-46adcb80
+  substrateImageTag: sha-231a9ef1
 
   # Full substrate SHA the images above were built at. Used by the D3
   # crypto-bootstrap Job (installMode: helm-native) to check out the right
   # substrate source when it builds kubectl-ate from source. Should track
   # substrateImageTag — the "sha-<8char>" prefix here is the first 8 chars
   # of this full SHA.
-  substrateFullSHA: "46adcb8017852fa4e322798828f3b2ea361fc4cf"
+  substrateFullSHA: "231a9ef189a881c6b7f9ae12fb81db86447537e4"
+
+  # OTLP exporter endpoint written into the vendored ate-otel-config
+  # ConfigMap (consumed via envFrom by all four substrate control-plane
+  # components). Empty keeps upstream's default (the GKE-managed collector
+  # address); point it at your own collector to receive substrate traces.
+  otelExporterEndpoint: ""
 
   # NodeSelector for the D3 crypto-bootstrap Job. The Job image
   # (golang:1.25-bookworm + apt install + go install kubectl-ate) is heavy

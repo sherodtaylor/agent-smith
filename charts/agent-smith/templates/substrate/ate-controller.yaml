@@ -72,6 +72,34 @@ roleRef:
   kind: ClusterRole
   name: ate-controller
   apiGroup: rbac.authorization.k8s.io
+---
+# EndpointSlice reads in ate-system, needed by the gRPC `k8s:///` resolver
+# that atenet-router now uses to reach ateapi. Upstream ships the Role in
+# manifests/ate-install/generated/role.yaml and the RoleBinding in
+# ate-controller.yaml; the chart inlines RBAC per component, so both live here.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: ate-controller
+  namespace: ate-system
+rules:
+- apiGroups: ["discovery.k8s.io"]
+  resources: ["endpointslices"]
+  verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: ate-controller
+  namespace: ate-system
+subjects:
+- kind: ServiceAccount
+  name: ate-controller
+  namespace: ate-system
+roleRef:
+  kind: Role
+  name: ate-controller
+  apiGroup: rbac.authorization.k8s.io
 
 ---
 

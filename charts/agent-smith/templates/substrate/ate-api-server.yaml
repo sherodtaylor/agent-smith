@@ -32,11 +32,6 @@ rules:
 - apiGroups: ["storage.k8s.io"]
   resources: ["storageclasses"]
   verbs: ["get", "watch", "list"]
-# Secret reads for env source resolution are intentionally NOT granted
-# cluster-wide here. Each demo / tenant is responsible for granting
-# ate-api-server read access only to the specific Secrets referenced by its
-# ActorTemplates (e.g. via a namespace-scoped Role + RoleBinding using
-# resourceNames).
 ---
 # Create Service Account for Workload Identity
 apiVersion: v1
@@ -93,19 +88,39 @@ spec:
       - name: ate-api-server
         image: "ghcr.io/sherodtaylor/substrate/ateapi:{{ .Values.actor.substrateImageTag }}"
         args:
-          - "--grpc-listen-addr=0.0.0.0:443"
+          # --grpc-listen-addr dropped upstream: the flag already defaults to
+          # ":443", which binds both families on a dual-stack cluster, whereas
+          # the explicit 0.0.0.0 pinned it to IPv4 (see the Service's
+          # ipFamilyPolicy below).
           - "--grpc-server-cred-bundle=/run/servicedns.podcert.ate.dev/credential-bundle.pem"
           - --redis-cluster-address=$(REDIS_CLUSTER_ADDRESS)
-          - --redis-ca-certs=/etc/valkey-ca/ca.crt
+          # Valkey's serving cert is now verified against the projected
+          # servicedns trust bundle instead of the valkey-ca-certs Secret.
+          - --redis-ca-certs=/run/servicedns.podcert.ate.dev/trust-bundle.pem
           - --redis-use-iam-auth=$(REDIS_USE_IAM_AUTH)
           - --redis-tls-server-name=$(REDIS_TLS_SERVER_NAME)
           - --redis-client-cert=$(REDIS_CLIENT_CERT)
+          # Persistence backend. "redis" (valkey) is the chart default; the
+          # chart ships no Postgres, so switching STORE_BACKEND to "postgres"
+          # also requires supplying POSTGRES_CONNECTION_STRING and running
+          # your own instance. Empty/unset values make ateapi exit with
+          # `unknown --store-backend ""`, so both keys are seeded by the
+          # bootstrap Job's ate-api-server-envvars ConfigMap.
+          - --store-backend=$(STORE_BACKEND)
+          - --postgres-connection-string=$(POSTGRES_CONNECTION_STRING)
           - --client-jwt-issuer=$(CLIENT_JWT_ISSUER)
           - --client-jwt-audience=api.ate-system.svc
           - --actor-id-jwt-pool=/run/actor-id-jwt-pool/pool.json
           - --actor-id-ca-pool=/run/actor-id-ca-pool/pool.json
           - --atelet-client-cred-bundle=/run/podidentity.podcert.ate.dev/credential-bundle.pem
           - --pod-identity-ca-certs=/run/podidentity.podcert.ate.dev/trust-bundle.pem
+          # Pluggable actor egress, cluster-wide: ateapi stamps this address
+          # onto every atelet Run/Restore, ateom hands it to atunnel, and actor
+          # TCP egress is transparently redirected (nftables) into atunnel,
+          # which wraps it in mTLS + HTTP CONNECT to the egress gateway.
+          # Upstream marks this a temporary knob (removed once their egress API
+          # PR lands) — re-check on the next re-vendor.
+          - --egress-gateway-address=atenet-egress.ate-system.svc:443
           # Graceful shutdown knobs. The sum must fit within terminationGracePeriodSeconds.
           - --drain-delay=13s
           - --drain-timeout=15s
@@ -152,6 +167,18 @@ spec:
               name: ate-api-server-envvars
               key: REDIS_CLIENT_CERT
               optional: true
+        - name: STORE_BACKEND
+          valueFrom:
+            configMapKeyRef:
+              name: ate-api-server-envvars
+              key: STORE_BACKEND
+              optional: true
+        - name: POSTGRES_CONNECTION_STRING
+          valueFrom:
+            configMapKeyRef:
+              name: ate-api-server-envvars
+              key: POSTGRES_CONNECTION_STRING
+              optional: true
         - name: CLIENT_JWT_ISSUER
           valueFrom:
             configMapKeyRef:
@@ -176,16 +203,12 @@ spec:
         - name: "servicedns"
           mountPath: "/run/servicedns.podcert.ate.dev"
         # podidentity: the apiserver's client identity (SPIFFE) when it dials
-        # valkey and atelet, plus the trust bundle for verifying atelet's
-        # serving certificate.
+        # the selected store and atelet, plus the trust bundle for verifying
+        # atelet's serving certificate.
         - name: "podidentity"
           mountPath: "/run/podidentity.podcert.ate.dev"
         - name: "actor-id-jwt-pool"
           mountPath: "/run/actor-id-jwt-pool"
-        # Note: See README.md for how to generate this secret.
-        - name: "valkey-ca-certs"
-          mountPath: "/etc/valkey-ca"
-          readOnly: true
         - name: "actor-id-ca-pool"
           mountPath: "/run/actor-id-ca-pool"
           readOnly: true
@@ -217,6 +240,14 @@ spec:
               signerName: servicedns.podcert.ate.dev/identity
               keyType: ECDSAP256
               credentialBundlePath: credential-bundle.pem
+          # Trust bundle for the servicedns signer — replaces the
+          # valkey-ca-certs Secret mount as --redis-ca-certs.
+          - clusterTrustBundle:
+              signerName: servicedns.podcert.ate.dev/identity
+              labelSelector:
+                matchLabels:
+                  podcert.ate.dev/canarying: live
+              path: trust-bundle.pem
       - name: "podidentity"
         projected:
           sources:
@@ -238,14 +269,6 @@ spec:
               items:
               - key: "pool"
                 path: "pool.json"
-      - name: "valkey-ca-certs"
-        projected:
-          sources:
-          - secret:
-              name: "valkey-ca-certs"
-              items:
-              - key: "ca.crt"
-                path: "ca.crt"
       - name: "actor-id-ca-pool"
         projected:
           sources:
@@ -278,6 +301,8 @@ spec:
   # Headless (i.e. `clusterIP: None`) services make DNS return one A record per
   # ready pod so gRPC clients can load balance client-side.
   clusterIP: None
+  # Prefer, not Require: Require fails Service creation on a single-stack cluster.
+  ipFamilyPolicy: PreferDualStack
   selector:
     app: ate-api-server
   ports:

@@ -6,7 +6,7 @@ Without this, ate-controller refuses ResumeGoldenActor:
    spec.default=true or name one via WorkerPool.spec.sandboxConfigName"
 
 Vendored from upstream manifests/ate-install/sandboxconfig-gvisor.yaml at
-pinned SHA 231a9ef1. atelet now fetches the gVisor release tarball
+pinned SHA 66310bb2. atelet now fetches the gVisor release tarball
 (gvisor.tar.bz2: runsc plus the gvisor-bin/ helpers runsc requires next to
 it) and extracts it locally; the legacy bare-binary "runsc" asset is still
 accepted. The gs:// URLs are gvisor's public release bucket —
@@ -28,6 +28,10 @@ metadata:
 spec:
   sandboxClass: {{ .Values.actor.workerPool.sandboxClass | quote }}
   default: {{ .Values.actor.sandboxConfig.default }}
+  # Required by the CRD as of 4b12ce67, and CEL-validated to contain "@" —
+  # the image is recorded in the snapshot manifest, so an unpinned tag would
+  # let a re-pull invalidate existing snapshots.
+  pauseImage: {{ required "actor.sandboxConfig.pauseImage is required (must be digest-pinned)" .Values.actor.sandboxConfig.pauseImage | quote }}
   assets:
     {{- toYaml .Values.actor.sandboxConfig.assets | nindent 4 }}
 {{- end }}

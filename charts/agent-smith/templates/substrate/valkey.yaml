@@ -14,7 +14,7 @@
 # limitations under the License.
 
 # NOTE: Vendored from upstream manifests/ate-install/valkey.yaml at pinned SHA
-# 46adcb8 (verified unchanged at 231a9ef1). Substrate's session-storage backend (referenced by ate-api-server as
+# 46adcb8 (verified unchanged at 66310bb2). Substrate's session-storage backend (referenced by ate-api-server as
 # valkey-cluster.ate-system.svc:6379). Load-bearing: without valkey the
 # apiserver's Redis-address client cannot boot. Image is upstream `valkey/valkey`
 # (not a substrate binary), so no ko:// rewrite.

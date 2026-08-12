@@ -68,9 +68,9 @@ jobs:
     # the workflow. Same GITHUB_TOKEN handles the push; no extra secret.
     #
     # SUBSTRATE_REPO currently points at our downstream fork: upstream
-    # 231a9ef1 + the agent-substrate/substrate#818 suspend-race fix
-    # (u10-fix branch). Revert to agent-substrate/substrate once #818
-    # is fixed upstream.
+    # 4b12ce67 + the agent-substrate/substrate#818 suspend-race fix and the
+    # evicted-worker reap (u10-fix-rebased branch). Revert to
+    # agent-substrate/substrate once both land upstream.
     name: Build + push substrate images
     runs-on: ubuntu-latest
     permissions:
@@ -78,7 +78,7 @@ jobs:
       packages: write
     env:
       SUBSTRATE_REPO: sherodtaylor/substrate
-      SUBSTRATE_SHA: 8567d5d6485bd467d1cbefbb4d380ac146e3c440
+      SUBSTRATE_SHA: 66310bb2a9e202d1fc9545f1ec700e6c5a8cc738
       KO_DOCKER_REPO: ghcr.io/sherodtaylor/substrate
     steps:
       - name: Checkout substrate at pinned SHA

@@ -126,15 +126,29 @@ spec:
               fieldPath: metadata.uid
         - name: OTEL_RESOURCE_ATTRIBUTES
           value: k8s.namespace.name=$(POD_NAMESPACE),k8s.pod.name=$(POD_NAME),k8s.pod.uid=$(POD_UID),service.instance.id=$(POD_UID)
-        - name: ATE_STORAGE_BACKEND
-          value: {{ .Values.actor.snapshotStore.backend | quote }}
-        {{- if eq .Values.actor.snapshotStore.backend "s3" }}
-        - name: ATE_STORAGE_ENDPOINT
-          value: {{ printf "http://%s" .Values.actor.snapshotStore.endpoint | quote }}
-        - name: ATE_STORAGE_ACCESS_KEY
-          value: "minioadmin"
-        - name: ATE_STORAGE_SECRET_KEY
-          value: "minioadmin"
+        {{- /* S3 snapshot-store wiring. These AWS_* names are what the
+             atelet's S3 uploader reads (upstream kind overlay parity);
+             endpoint + credentialsSecret are operator-supplied — the chart
+             deliberately bundles no object store. */}}
+        {{- with .Values.actor.snapshotStore }}
+        {{- if eq .backend "s3" }}
+        - name: AWS_REGION
+          value: {{ .region | default "us-east-1" | quote }}
+        - name: AWS_ENDPOINT_URL
+          value: {{ required "actor.snapshotStore.endpoint is required when backend=s3 (full URL, e.g. http://host:port)" .endpoint | quote }}
+        - name: AWS_S3_USE_PATH_STYLE
+          value: {{ .usePathStyle | quote }}
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: {{ required "actor.snapshotStore.credentialsSecret is required when backend=s3" .credentialsSecret }}
+              key: AWS_ACCESS_KEY_ID
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: {{ .credentialsSecret }}
+              key: AWS_SECRET_ACCESS_KEY
+        {{- end }}
         {{- end }}
         # OTLP exporter settings are shared by every control plane component;
         # see manifests/ate-install/ate-otel-config.yaml (vendored as

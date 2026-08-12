@@ -163,17 +163,31 @@ actor:
     nodeSelector: {}
     tolerations: []
 
-  # Snapshot storage. S3-compatible endpoints work with `usePathStyle: true`
-  # (rustfs, MinIO, SeaweedFS). AWS S3 and GCS use the native SDK path.
+  # Snapshot storage — bring-your-own S3-compatible object store (MinIO,
+  # SeaweedFS, rustfs, AWS S3). The chart does NOT bundle a store; the
+  # operator supplies an endpoint + credentials Secret. Rendered into the
+  # atelet DaemonSet as the AWS_* env vars substrate's S3 uploader actually
+  # reads (mirrors upstream manifests/ate-install/kind/atelet). The old
+  # ATE_STORAGE_* names were installer-side vars the atelet binary ignores —
+  # with them, every checkpoint upload died on "Invalid region" and golden
+  # actors crashed at first snapshot (see agent-substrate#818 post-mortem).
   snapshotStore:
     backend: s3                     # s3 | gcs
-    endpoint: rustfs.ate-system.svc.cluster.local:9000
+    # Full base URL of the S3 endpoint, e.g. http://192.168.4.96:30304.
+    # REQUIRED when backend=s3 (template fails without it).
+    endpoint: ""
+    region: us-east-1
     bucket: agent-smith
     usePathStyle: true
-    # ExternalSecret / manual Secret projecting AWS_ACCESS_KEY_ID +
-    # AWS_SECRET_ACCESS_KEY into atelet + actor env. Non-empty required
-    # before Phase-2 real actors run (see #117 tech-spec, pmbot #126 review).
+    # ExternalSecret / manual Secret in ate-system projecting
+    # AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY. REQUIRED when backend=s3.
     credentialsSecret: ""
+
+  # Expected issuer for client JWTs presented to ate-api-server. Kubernetes
+  # ServiceAccount tokens (what kubectl-ate sends) carry the cluster's
+  # issuer; the default matches k3s/kubeadm. An empty issuer rejects every
+  # token with 'unexpected issuer' — never ship "".
+  clientJwtIssuer: "https://kubernetes.default.svc.cluster.local"
 
   # Cluster-scoped default SandboxConfig for the WorkerPool's sandboxClass.
   # ate-controller refuses ResumeGoldenActor without one ("no default

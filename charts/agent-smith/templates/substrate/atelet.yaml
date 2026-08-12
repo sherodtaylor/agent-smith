@@ -154,12 +154,38 @@ spec:
         - name: ATE_STORAGE_BACKEND
           value: {{ .Values.actor.snapshotStore.backend | quote }}
         {{- if eq .Values.actor.snapshotStore.backend "s3" }}
-        - name: ATE_STORAGE_ENDPOINT
+        # atelet reads ATE_STORAGE_BACKEND itself, then hands the rest to the
+        # AWS SDK's default config chain (cmd/atelet/main.go) — so the endpoint
+        # and credentials must use the SDK's own variable names. The former
+        # ATE_STORAGE_{ENDPOINT,ACCESS_KEY,SECRET_KEY} names were never read by
+        # anything; snapshots only worked because rustfs allows anonymous
+        # access. An authenticated store (SeaweedFS, MinIO) needs these.
+        - name: AWS_REGION
+          value: {{ .Values.actor.snapshotStore.region | default "us-east-1" | quote }}
+        - name: AWS_ENDPOINT_URL
           value: {{ printf "http://%s" .Values.actor.snapshotStore.endpoint | quote }}
-        - name: ATE_STORAGE_ACCESS_KEY
-          value: "minioadmin"
-        - name: ATE_STORAGE_SECRET_KEY
-          value: "minioadmin"
+        - name: AWS_S3_USE_PATH_STYLE
+          value: {{ .Values.actor.snapshotStore.usePathStyle | quote }}
+        {{- if .Values.actor.snapshotStore.credentialsSecret }}
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.actor.snapshotStore.credentialsSecret | quote }}
+              key: AWS_ACCESS_KEY_ID
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.actor.snapshotStore.credentialsSecret | quote }}
+              key: AWS_SECRET_ACCESS_KEY
+        {{- else }}
+        # No credentialsSecret set: the store is assumed to be an unauthenticated
+        # dev instance (the rustfs default). The SDK still requires non-empty
+        # credentials to sign requests, which such stores ignore.
+        - name: AWS_ACCESS_KEY_ID
+          value: "rustfsadmin"
+        - name: AWS_SECRET_ACCESS_KEY
+          value: "rustfsadmin"
+        {{- end }}
         {{- end }}
         # OTLP exporter settings are shared by every control plane component;
         # see manifests/ate-install/ate-otel-config.yaml (vendored as

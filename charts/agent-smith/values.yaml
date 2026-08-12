@@ -170,9 +170,12 @@ actor:
     endpoint: rustfs.ate-system.svc.cluster.local:9000
     bucket: agent-smith
     usePathStyle: true
-    # ExternalSecret / manual Secret projecting AWS_ACCESS_KEY_ID +
-    # AWS_SECRET_ACCESS_KEY into atelet + actor env. Non-empty required
-    # before Phase-2 real actors run (see #117 tech-spec, pmbot #126 review).
+    region: us-east-1                 # S3 clients require one; self-hosted stores ignore it
+    # Secret (ExternalSecret or manual) holding AWS_ACCESS_KEY_ID +
+    # AWS_SECRET_ACCESS_KEY under those exact keys, in the ate-system
+    # namespace where atelet consumes them. Leave empty only for an
+    # unauthenticated dev store — snapshots contain checkpointed agent
+    # memory, so a real store must require auth.
     credentialsSecret: ""
 
   # Cluster-scoped default SandboxConfig for the WorkerPool's sandboxClass.

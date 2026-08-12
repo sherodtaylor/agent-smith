@@ -14,7 +14,7 @@
 # limitations under the License.
 
 # NOTE: Vendored from upstream manifests/ate-install/ate-otel-config.yaml at
-# pinned SHA 231a9ef1. Single source of truth for the OTLP exporter settings
+# pinned SHA 231a9ef1 (verified unchanged at 66310bb2). Single source of truth for the OTLP exporter settings
 # shared by every control plane component (ate-api-server, ate-controller,
 # atelet, atenet-router), which consume it via `envFrom`. ate-controller
 # additionally propagates these values to the ateom worker pods it creates,

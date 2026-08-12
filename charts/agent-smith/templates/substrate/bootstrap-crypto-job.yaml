@@ -16,7 +16,7 @@ It:
      substrate's own hack/install-ate.sh, functions
      create_{jwt_authority,actor_id_ca,podcertificate_controller_cas}_pool_secret).
      Upstream renamed session-id-{jwt,ca}-pool to actor-id-{jwt,ca}-pool
-     at 231a9ef1; the names below track the pinned SHA.
+     at 66310bb2; the names below track the pinned SHA.
   3. Extracts the two podcert CA-pool root PEMs, concats them into the
      `valkey-ca-certs` Secret (substrate's ca_pool_root_pem helper).
   4. Creates the ate-api-server-envvars ConfigMap (create_api_server_env_vars).
@@ -200,8 +200,9 @@ spec:
 
               ca_pool_root_pem() {
                 local secret="$1"
+                local namespace="${2:-podcertificate-controller-system}"
                 local pool_json
-                pool_json=$(kubectl get secret -n podcertificate-controller-system "${secret}" \
+                pool_json=$(kubectl get secret -n "${namespace}" "${secret}" \
                             -o jsonpath='{.data.pool}' | base64 --decode)
                 local der_base64
                 der_base64=$(echo "${pool_json}" | grep -o '"RootCertificateDER":"[^"]*' \
@@ -224,10 +225,32 @@ spec:
               fi
 
               # ---------------------------------------------------------------
+              # actor-id-ca-certs: cert-only copy of the actor-identity CA root.
+              # The egress gateway verifies actor client certs against it and
+              # must not see the signing key that actor-id-ca-pool also holds.
+              # Mirrors upstream create_actor_id_ca_certs_secret. Extract into a
+              # variable first — a failed substitution inside the create-secret
+              # argument list would silently produce an empty trust bundle and an
+              # egress gateway that rejects every actor.
+              # ---------------------------------------------------------------
+
+              echo "==> ensuring actor-id-ca-certs (ate-system)"
+              if ! kubectl get secret -n ate-system actor-id-ca-certs >/dev/null 2>&1; then
+                actorid_root=$(ca_pool_root_pem actor-id-ca-pool ate-system)
+                if [[ -z "${actorid_root}" ]]; then
+                  echo "error: failed to extract the actor-identity CA root for actor-id-ca-certs" >&2
+                  exit 1
+                fi
+                kubectl create secret generic actor-id-ca-certs \
+                  --namespace=ate-system \
+                  --from-literal="ca.crt=${actorid_root}"
+              fi
+
+              # ---------------------------------------------------------------
               # ate-api-server-envvars ConfigMap. Substrate's install-ate.sh
               # create_api_server_env_vars() builds this — for the spike we
               # ship the vanilla self-hosted flavor (valkey address, no IAM
-              # auth, no external redis TLS server name).
+              # auth, no external redis TLS server name, redis store backend).
               # ---------------------------------------------------------------
 
               echo "==> ensuring ate-api-server-envvars ConfigMap (ate-system)"
@@ -237,6 +260,8 @@ spec:
                 --from-literal=REDIS_USE_IAM_AUTH="false" \
                 --from-literal=REDIS_TLS_SERVER_NAME="valkey-cluster.ate-system.svc" \
                 --from-literal=REDIS_CLIENT_CERT="/run/podidentity.podcert.ate.dev/credential-bundle.pem" \
+                --from-literal=STORE_BACKEND="redis" \
+                --from-literal=POSTGRES_CONNECTION_STRING="" \
                 --from-literal=CLIENT_JWT_ISSUER="" \
                 --dry-run=client -o yaml | kubectl apply -f -
 

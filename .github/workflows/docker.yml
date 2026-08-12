@@ -78,7 +78,7 @@ jobs:
       packages: write
     env:
       SUBSTRATE_REPO: sherodtaylor/substrate
-      SUBSTRATE_SHA: b65e2663644513a410e04af5f31a313c9caaa9f4
+      SUBSTRATE_SHA: 8567d5d6485bd467d1cbefbb4d380ac146e3c440
       KO_DOCKER_REPO: ghcr.io/sherodtaylor/substrate
     steps:
       - name: Checkout substrate at pinned SHA

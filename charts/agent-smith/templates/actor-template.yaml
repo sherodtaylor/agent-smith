@@ -1,9 +1,27 @@
 {{- /*
 Agent Substrate ActorTemplate — one per persona with runtime=actor.
 
-The harness container is the same agent-smith image as deployment mode,
-with the same secret refs and env. iron-proxy co-locates as a container
-inside the sandbox when actor.ironProxyMode=sidecar (default).
+The harness container is the same agent-smith image as deployment mode.
+Per-agent env — typically MATRIX_ACCESS_TOKEN, optionally ANTHROPIC_API_KEY —
+arrives as plain literals via actor.agentEnv.<name>; populate that map
+via Flux valuesFrom (Secret → targetPath) at deploy time and never
+commit real values. The ActorTemplate CRD supports neither secret volume
+mounts nor envFrom, and secretKeyRef won't fire until upstream
+agent-substrate/substrate#835 lands, so plain-env-via-values is the only
+working path today. Long-term convergence is HTTPS_PROXY once #835 +
+ext_proc arrive.
+
+Do NOT put the deployment-mode iron-proxy stubs
+(GITHUB_TOKEN=proxy-token-github, NODE_EXTRA_CA_CERTS=/root/iron-proxy.crt)
+into agentEnv: actor egress bypasses iron-proxy (sandbox nftables →
+atunnel → atenet-egress), so the stubs would reach the real endpoint
+unswapped and 401. Real GitHub access from actor mode is deferred until
+the HTTPS_PROXY convergence path lands.
+
+iron-proxy sidecar removed: image was not digest-pinned (rc14 CRD
+requires "@" pin) and the sidecar's own token could not be delivered
+either, so the container never worked in this mode. If/when we come
+back to sandbox egress control, atenet's HTTPForward is the path.
 
 Persona ConfigMap: intentionally NOT mounted. In actor mode the persona
 is baked into the golden snapshot at ActorTemplate apply time; changing
@@ -44,15 +62,43 @@ spec:
           value: {{ $agent.name | quote }}
         - name: HOME
           value: /root
-        {{- if $agent.existingSecret }}
-        - name: ANTHROPIC_API_KEY
-          valueFrom:
-            secretKeyRef:
-              name: {{ $agent.existingSecret }}
-              key: anthropic-api-key
+        - name: IS_SANDBOX
+          value: "true"
+        {{- /* Matrix non-secret env — parity with statefulset's agent
+              container so claude-reauth's matrixDM() and the plugin's
+              runtime config both work. The token itself arrives via
+              actor.agentEnv below. */ -}}
+        {{- $homeserverUrl := default (default "" $root.Values.matrix.homeserverUrl) $agent.matrix.homeserverUrl }}
+        {{- if $homeserverUrl }}
+        - name: MATRIX_HOMESERVER_URL
+          value: {{ $homeserverUrl | quote }}
         {{- end }}
-        {{- with $root.Values.extraEnv }}
-        {{- toYaml . | nindent 8 }}
+        - name: MATRIX_BOT_USER_ID
+          value: {{ $agent.matrix.botUserId | quote }}
+        {{- if $agent.matrix.allowedUsers }}
+        - name: MATRIX_ALLOWED_USERS
+          value: {{ $agent.matrix.allowedUsers | quote }}
+        {{- end }}
+        {{- if $root.Values.quietHours.window }}
+        - name: QUIET_HOURS
+          value: {{ $root.Values.quietHours.window | quote }}
+        - name: QUIET_HOURS_TZ
+          value: {{ $root.Values.quietHours.tz | quote }}
+        {{- end }}
+        {{- /* Fleet-wide extraEnv is deliberately NOT rendered here.
+              The homelab's shared-values.yaml puts the iron-proxy stubs
+              (GITHUB_TOKEN=proxy-token-github, NODE_EXTRA_CA_CERTS) into
+              extraEnv for deployment-mode agents; those stubs are
+              pointless in actor mode because sandbox egress bypasses
+              iron-proxy entirely (nftables → atunnel → atenet-egress).
+              Anything an actor legitimately needs goes through
+              actor.agentEnv.<name> instead. */ -}}
+        {{- /* Per-agent env from actor.agentEnv.<name>. Rendered last so
+              per-agent values (typically MATRIX_ACCESS_TOKEN, fed by
+              Flux valuesFrom targetPath) win any collision. */ -}}
+        {{- range $k, $v := (get ($root.Values.actor.agentEnv | default dict) $agent.name) }}
+        - name: {{ $k }}
+          value: {{ $v | quote }}
         {{- end }}
       {{- if $root.Values.actor.readyz.enabled }}
       readyz:
@@ -63,19 +109,6 @@ spec:
       volumeMounts:
         - name: agent-state
           mountPath: /root
-    {{- if eq $root.Values.actor.ironProxyMode "sidecar" }}
-    - name: iron-proxy
-      image: ironsh/iron-proxy:0.41.0
-      args: ["-config", "/etc/iron-proxy/proxy.yaml"]
-      env:
-        {{- if $agent.existingSecret }}
-        - name: GITHUB_TOKEN
-          valueFrom:
-            secretKeyRef:
-              name: {{ $agent.existingSecret }}
-              key: github-token
-        {{- end }}
-    {{- end }}
   volumes:
     - name: agent-state
       durableDir:

@@ -215,12 +215,33 @@ actor:
     path: /readyz
     port: 8081
 
-  # Egress control shape inside the sandbox.
-  #   sidecar — iron-proxy co-located as an ActorTemplate container (default;
-  #             matches today's egress-control semantics).
-  #   atenet — route through atenet's Envoy (deferred; requires atenet
-  #            HTTPForward config we don't ship today).
-  ironProxyMode: sidecar
+  # Per-agent env for actor-mode personas, keyed by agent name. Values render
+  # as plain env literals on the ActorTemplate agent container — no
+  # secretKeyRef, no envFrom (the CRD doesn't support either, and upstream
+  # secretKeyRef delivery waits on agent-substrate/substrate#835). Populate
+  # via Flux `valuesFrom` with a `targetPath` per key so real credentials
+  # come from a Kubernetes Secret at deploy time and never appear in the
+  # chart values:
+  #
+  #   valuesFrom:
+  #     - kind: Secret
+  #       name: brandbot-secrets
+  #       valuesKey: MATRIX_ACCESS_TOKEN
+  #       targetPath: actor.agentEnv.brandbot.MATRIX_ACCESS_TOKEN
+  #
+  # Typical keys: MATRIX_ACCESS_TOKEN, optionally ANTHROPIC_API_KEY (skip
+  # when the persona uses the Claude OAuth home-dir path baked into the
+  # golden). Do NOT wire the deployment-mode iron-proxy stubs
+  # (GITHUB_TOKEN=proxy-token-github, NODE_EXTRA_CA_CERTS=/root/iron-proxy.crt)
+  # — actor egress bypasses iron-proxy (nftables → atunnel → atenet-egress),
+  # so the stubs would reach the real endpoint unswapped and 401. Real
+  # GitHub access from actor mode is deferred until the HTTPS_PROXY
+  # convergence path lands.
+  agentEnv: {}
+  # agentEnv:
+  #   brandbot:
+  #     MATRIX_ACCESS_TOKEN: ""   # filled by valuesFrom targetPath
+  #     ANTHROPIC_API_KEY: ""     # optional; omit if using OAuth home dir
 
   # Substrate install shape — D-spike comparison (see
   # docs/superpowers/specs/2026-07-30-d{1,2,3}-*-spike.md).

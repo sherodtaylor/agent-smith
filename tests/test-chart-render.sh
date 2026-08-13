@@ -280,5 +280,63 @@ v020_count=$(echo "$out" | grep -cE 'agent-smith:v0\.2\.0' || true)
 assert_eq "$v021_count" "2" "image override: 2 occurrences of v0.2.1 (alpha init + main)"
 assert_eq "$v020_count" "2" "image override: 2 occurrences of v0.2.0 (beta init + main, fallback to top-level)"
 
+# ── Case: actor-mode agent renders ActorTemplate with agentEnv, no secretKeyRef ──
+# Regression guard for the R4 secret-delivery change: fleet extraEnv (iron-proxy
+# stubs) MUST NOT leak into actor mode; per-agent MATRIX_ACCESS_TOKEN MUST arrive
+# via actor.agentEnv.<name>; the iron-proxy sidecar MUST be gone.
+echo "[case] actor mode + agentEnv + extraEnv isolation"
+cat > /tmp/values-actor.yaml <<'EOF'
+image: { repository: ghcr.io/sherodtaylor/agent-smith, tag: v0.3.0-rc14 }
+matrix: { homeserverUrl: https://lab.example.com }
+extraEnv:
+  - name: GITHUB_TOKEN
+    value: proxy-token-github
+  - name: NODE_EXTRA_CA_CERTS
+    value: /root/iron-proxy.crt
+actor:
+  enabled: true
+  snapshotStore:
+    endpoint: seaweedfs.ate-system.svc:8333
+    bucket: agent-smith
+    usePathStyle: true
+    credentialsSecret: seaweedfs-s3
+  agentEnv:
+    brandbot:
+      MATRIX_ACCESS_TOKEN: fake-token-for-test
+agents:
+  - name: brandbot
+    existingSecret: brandbot-secrets
+    runtime: actor
+    matrix:
+      botUserId: "@brandbot:lab.example.com"
+      allowedUsers: "@sherod:lab.example.com"
+    agentRepos: [example/repo]
+    primaryRepo: repo
+  - name: infrabot
+    existingSecret: infrabot-secrets
+    matrix:
+      botUserId: "@infrabot:lab.example.com"
+    agentRepos: [example/repo]
+    primaryRepo: repo
+EOF
+out=$(render /tmp/values-actor.yaml)
+actor_count=$(echo "$out" | grep -cE '^kind: ActorTemplate' || true)
+sts_count=$(echo "$out" | grep -cE '^kind: StatefulSet' || true)
+assert_eq "$actor_count" "1" "actor mode: 1 ActorTemplate (brandbot)"
+assert_eq "$sts_count" "1" "actor mode: 1 StatefulSet (infrabot, coexists)"
+# Extract only the ActorTemplate block for leakage assertions.
+actor_block=$(echo "$out" | awk '/^kind: ActorTemplate/,/^---/')
+assert_not_contains "$actor_block" 'iron-proxy'         "actor mode: no iron-proxy sidecar"
+assert_not_contains "$actor_block" 'secretKeyRef'       "actor mode: no secretKeyRef"
+assert_not_contains "$actor_block" 'GITHUB_TOKEN'       "actor mode: fleet iron-proxy stubs filtered"
+assert_not_contains "$actor_block" 'NODE_EXTRA_CA_CERTS' "actor mode: NODE_EXTRA_CA_CERTS not leaked from extraEnv"
+assert_contains     "$actor_block" 'name: MATRIX_ACCESS_TOKEN' "actor mode: agentEnv token wired"
+assert_contains     "$actor_block" 'value: "fake-token-for-test"' "actor mode: agentEnv value rendered as plain literal"
+assert_contains     "$actor_block" 'name: IS_SANDBOX'   "actor mode: IS_SANDBOX hardcoded"
+assert_contains     "$actor_block" 'name: MATRIX_BOT_USER_ID' "actor mode: matrix non-secret env present"
+# Deployment-mode agent (infrabot) still gets the fleet extraEnv — verify the stubs stayed.
+sts_block=$(echo "$out" | awk '/^kind: StatefulSet/,/^---/')
+assert_contains "$sts_block" 'GITHUB_TOKEN'  "deployment mode: fleet extraEnv still delivered"
+
 echo "[test-chart-render] summary: pass=${PASS} fail=${FAIL}"
 exit $FAIL

@@ -48,7 +48,6 @@ metadata:
     agent-smith.io/agent: {{ $agent.name }}
 spec:
   sandboxClass: {{ $root.Values.actor.workerPool.sandboxClass | quote }}
-  pauseImage: "registry.k8s.io/pause:3.10.2"
   workerSelector:
     matchLabels:
       app.kubernetes.io/instance: {{ $root.Release.Name }}

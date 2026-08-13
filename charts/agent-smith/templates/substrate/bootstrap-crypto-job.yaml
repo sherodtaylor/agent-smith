@@ -262,7 +262,7 @@ spec:
                 --from-literal=REDIS_CLIENT_CERT="/run/podidentity.podcert.ate.dev/credential-bundle.pem" \
                 --from-literal=STORE_BACKEND="redis" \
                 --from-literal=POSTGRES_CONNECTION_STRING="" \
-                --from-literal=CLIENT_JWT_ISSUER="" \
+                --from-literal=CLIENT_JWT_ISSUER={{ .Values.actor.clientJwtIssuer | quote }} \
                 --dry-run=client -o yaml | kubectl apply -f -
 
               echo "==> bootstrap complete"

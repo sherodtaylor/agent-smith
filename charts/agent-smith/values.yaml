@@ -178,6 +178,14 @@ actor:
     # memory, so a real store must require auth.
     credentialsSecret: ""
 
+  # Expected issuer for client JWTs presented to ate-api-server (the
+  # bootstrap job writes it into the ate-api-server-envvars ConfigMap).
+  # kubectl-ate sends Kubernetes ServiceAccount tokens, which carry the
+  # cluster's issuer; the default matches k3s/kubeadm. The previous
+  # hardcoded "" rejected every token with 'unexpected issuer
+  # "https://kubernetes.default.svc.cluster.local"'.
+  clientJwtIssuer: "https://kubernetes.default.svc.cluster.local"
+
   # Cluster-scoped default SandboxConfig for the WorkerPool's sandboxClass.
   # ate-controller refuses ResumeGoldenActor without one ("no default
   # SandboxConfig for class \"gvisor\"; set one with spec.default=true or

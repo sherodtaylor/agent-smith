@@ -143,6 +143,18 @@ extraEnv: []
 # actor` continue to render as StatefulSets — the two modes coexist. When
 # `actor.enabled` is false (default) the actor.* block is entirely ignored.
 #
+# ActorTemplate names carry a spec-hash suffix (`<agent>-<hash8>`). The CRD
+# rejects in-place spec edits, so any drift (token rotation, image bump,
+# env change, snapshots move) yields a new resource — helm creates it and
+# prunes the old on a successful upgrade. Selectors follow the persona via
+# the stable `agent-smith.io/agent: <name>` label.
+#
+# Actor-mode images MUST be digest-pinned (`image.tag: "sha256:..."` — the
+# resolved digest, not a floating tag). The rc14 CRD's CEL rule requires
+# an `@` in the image ref, and the chart's actor template renders
+# `<repo>@<tag>`, so a non-digest tag will fail render with a message
+# naming the fix. Deployment-mode agents can still use floating tags.
+#
 # Requires K8s ≥ v1.36 with feature gates ClusterTrustBundle,
 # ClusterTrustBundleProjection, PodCertificateRequest + runtime-config
 # certificates.k8s.io/v1beta1=true. Substrate itself is a prereq — install

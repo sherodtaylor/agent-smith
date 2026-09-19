@@ -19,6 +19,72 @@ cut-a-release procedure.
 
 ## [Unreleased]
 
+---
+
+## [0.3.0-rc16] - 2026-09-19
+
+### Added
+
+- **chart (actor mode): hash-suffixed ActorTemplate names.** `metadata.name`
+  now carries a spec-hash suffix (`<agent>-<hash8>`, sha256sum of the rendered
+  spec | trunc 8). The ActorTemplate CRD rejects in-place spec edits, so any
+  drift (token rotation, image bump, env change, snapshots move) yields a new
+  resource — helm creates the new template and prunes the old on a successful
+  upgrade. Rename triggers a fresh BAKE via the substrate controller
+  (RunWorkload, no router deadline; ~75s cost), NOT a router-triggered resume,
+  so hash-suffix naming is safe under routine credential rotation. Selectors
+  follow the persona via the stable `agent-smith.io/agent: <name>` label.
+  Spec body extracted into `agent-smith.actorTemplateSpec` helper so the hash
+  and the emitted spec share one source of truth. Inert until a persona flips
+  back to `runtime: actor`. (#144)
+- **chart (actor mode): template-time actor-image-digest guard.** Render fails
+  early when `runtime: actor` and the resolved image tag isn't a `sha256:`
+  digest, with a message naming the fix. The rc14 CRD's CEL rule requires an
+  `@` in the container image ref and rejects floating tags; catching this at
+  template time surfaces the fix instead of an obscure CRD admission error at
+  Flux-apply time. Deployment mode continues to accept floating tags. (#144)
+
+### Fixed
+
+- **substrate bootstrap: `clientJwtIssuer` from values with a working default.**
+  `ate-api-server` rejected every ServiceAccount token with `unexpected issuer
+  "https://kubernetes.default.svc.cluster.local"` under the initial `""`
+  default. Chart now exposes `actor.clientJwtIssuer` (default
+  `https://kubernetes.default.svc.cluster.local` matching k3s/kubeadm),
+  written into `ate-api-server-envvars` by the bootstrap job. (#141)
+
+### Notes
+
+- Requires a digest-pinned image for any persona set to `runtime: actor`.
+  Deployment-mode agents are unaffected; upgrade is safe with the fleet
+  currently on deployment runtime (brandbot rolled back in homelab #187).
+
+## [0.3.0-rc15] - 2026-08-13
+
+### Added
+
+- **chart (actor mode): per-agent `actor.agentEnv.<name>` map for
+  secret-delivery.** Values render as plain env literals on the ActorTemplate
+  agent container — the CRD supports neither `envFrom` nor secret volume
+  mounts, and upstream `secretKeyRef` delivery is blocked on
+  `agent-substrate/substrate#835`. Populate via Flux `valuesFrom` with a
+  `targetPath` per key so real credentials come from a Kubernetes Secret at
+  deploy time and never appear in chart values. `MATRIX_ACCESS_TOKEN` is now
+  delivered this way (never actually reached actor personas pre-rc15 — latent
+  bug). Fleet-wide `extraEnv` is deliberately NOT rendered in actor mode
+  (iron-proxy stubs would 401 in the sandbox, where egress bypasses
+  iron-proxy). (#142)
+
+### Removed
+
+- **chart (actor mode): non-working secret paths dropped.** Removed both
+  `secretKeyRef` env entries and the iron-proxy sidecar from
+  `actor-template.yaml`. The sidecar was never digest-pinned (rc14 CRD
+  requires `@` pin) and its own token could not be delivered either, so the
+  container never worked in this mode. Removed stale `spec.pauseImage` from
+  ActorTemplate (rc14 CRD moved it to SandboxConfig — the exact field that
+  killed the earlier `-v7` rollout). (#142)
+
 ### Fixed
 
 - **substrate bootstrap: switch ate-api-server from `@env` args to Kubernetes
@@ -32,7 +98,8 @@ cut-a-release procedure.
   ConfigMap.** Without this key, `$(CLIENT_JWT_ISSUER)` in the Deployment args
   cannot be substituted and passes as a literal string. Added as an empty entry
   so the flag resolves to empty (matching the expected no-JWT-issuer behavior
-  for self-hosted installs).
+  for self-hosted installs). Superseded in rc16 by #141 (now sourced from
+  values with a working k3s/kubeadm default).
 
 ---
 

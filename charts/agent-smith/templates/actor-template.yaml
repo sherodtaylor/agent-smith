@@ -39,6 +39,23 @@ briefly coexist (harmless — the old one carries a stale token anyway).
 The stable `agent-smith.io/agent: <name>` label lets selectors follow
 the persona across hash bumps.
 
+snapshotsConfig.location is deliberately keyed on `<release>/<agent>/`
+with NO hash in the path — the snapshot prefix survives any template
+rename. Rename triggers a fresh BAKE (RunWorkload) on the substrate
+controller path, which has NO router deadline; the ~6s ceiling that
+R5 gate 2 addresses only guards ingress-triggered RESUMEs
+(atelet.AteomHerder/Restore). So rotation cost under hash-suffix
+naming is `persona restart + ~75s rebake` — the same order as a
+deployment-mode secret-rotation restart, and strictly safer than the
+immutable-spec brick this pattern removes. Confirmed against today's
+log evidence: RunWorkload never failed once, only Restore did
+(pmbot/infrabot cross-checked 2026-09-19). Gate 3 (this template)
+closes independent of gate 2. Two verify-at-re-flip items live on
+pmbot's list, not blocking the tag: (a) confirm rename→rebake vs
+attempted restore-from-old-snapshot, and (b) snapshot GC — every
+rebake writes a new UUID under the agent prefix, so orphans
+accumulate at fleet × rotation-cadence scale (added to R6 gate 4).
+
 Spec surface reference: docs/superpowers/specs/2026-07-29-agent-substrate-actor-mode-design.md.
 */ -}}
 {{- $root := . -}}

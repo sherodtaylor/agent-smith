@@ -283,10 +283,12 @@ assert_eq "$v020_count" "2" "image override: 2 occurrences of v0.2.0 (beta init 
 # ── Case: actor-mode agent renders ActorTemplate with agentEnv, no secretKeyRef ──
 # Regression guard for the R4 secret-delivery change: fleet extraEnv (iron-proxy
 # stubs) MUST NOT leak into actor mode; per-agent MATRIX_ACCESS_TOKEN MUST arrive
-# via actor.agentEnv.<name>; the iron-proxy sidecar MUST be gone.
+# via actor.agentEnv.<name>; the iron-proxy sidecar MUST be gone. Tag is a
+# fake-but-well-formed digest to satisfy the actor-image-digest guard.
+ACTOR_DIGEST='sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
 echo "[case] actor mode + agentEnv + extraEnv isolation"
-cat > /tmp/values-actor.yaml <<'EOF'
-image: { repository: ghcr.io/sherodtaylor/agent-smith, tag: v0.3.0-rc14 }
+cat > /tmp/values-actor.yaml <<EOF
+image: { repository: ghcr.io/sherodtaylor/agent-smith, tag: ${ACTOR_DIGEST} }
 matrix: { homeserverUrl: https://lab.example.com }
 extraEnv:
   - name: GITHUB_TOKEN
@@ -337,6 +339,73 @@ assert_contains     "$actor_block" 'name: MATRIX_BOT_USER_ID' "actor mode: matri
 # Deployment-mode agent (infrabot) still gets the fleet extraEnv — verify the stubs stayed.
 sts_block=$(echo "$out" | awk '/^kind: StatefulSet/,/^---/')
 assert_contains "$sts_block" 'GITHUB_TOKEN'  "deployment mode: fleet extraEnv still delivered"
+
+# ── Case: ActorTemplate name carries a spec-hash suffix ──
+# `<agent>-<hash8>` is the content address of the rendered spec: the CRD
+# rejects in-place spec edits, so any drift has to yield a new resource.
+# Regression: (a) name matches shape, (b) same spec twice → same hash
+# (idempotent), (c) any spec field change → different hash.
+echo "[case] actor mode: name = <agent>-<hash8>"
+assert_contains "$actor_block" '^  name: brandbot-[0-9a-f]{8}$' "actor mode: metadata.name = brandbot-<hash8>"
+assert_contains "$actor_block" '^    agent-smith.io/agent: brandbot$' "actor mode: stable per-persona selector label present"
+# Extract just the hash for cross-render comparison.
+hash_a=$(echo "$actor_block" | grep -oE '^  name: brandbot-[0-9a-f]{8}$' | head -1 | sed -E 's/.*brandbot-//')
+# Re-render the SAME fixture → same hash (deterministic).
+out_dup=$(render /tmp/values-actor.yaml)
+actor_dup=$(echo "$out_dup" | awk '/^kind: ActorTemplate/,/^---/')
+hash_dup=$(echo "$actor_dup" | grep -oE '^  name: brandbot-[0-9a-f]{8}$' | head -1 | sed -E 's/.*brandbot-//')
+assert_eq "$hash_dup" "$hash_a" "actor hash: deterministic across renders with identical values"
+# Change ONE spec-visible value → hash must change.
+sed 's/fake-token-for-test/rotated-token-value/' /tmp/values-actor.yaml > /tmp/values-actor-rotated.yaml
+out_rot=$(render /tmp/values-actor-rotated.yaml)
+actor_rot=$(echo "$out_rot" | awk '/^kind: ActorTemplate/,/^---/')
+hash_rot=$(echo "$actor_rot" | grep -oE '^  name: brandbot-[0-9a-f]{8}$' | head -1 | sed -E 's/.*brandbot-//')
+if [ "$hash_rot" = "$hash_a" ]; then
+  FAIL=$((FAIL + 1)); echo "  FAIL: actor hash: token rotation must change hash (both hashed to $hash_a)"
+else
+  PASS=$((PASS + 1)); echo "  PASS: actor hash: token rotation changed hash ($hash_a -> $hash_rot)"
+fi
+
+# ── Case: actor runtime + non-digest image tag → render fails with named fix ──
+# The rc14 CRD rejects any container image that isn't a digest ref; catch it
+# at template time rather than at Flux apply so the fix is in the error message.
+echo "[case] actor mode: non-digest image tag fails render"
+cat > /tmp/values-actor-nondigest.yaml <<'EOF'
+image: { repository: ghcr.io/sherodtaylor/agent-smith, tag: latest }
+matrix: { homeserverUrl: https://lab.example.com }
+actor:
+  enabled: true
+  snapshotStore:
+    endpoint: seaweedfs.ate-system.svc:8333
+    bucket: agent-smith
+    usePathStyle: true
+    credentialsSecret: seaweedfs-s3
+agents:
+  - name: brandbot
+    existingSecret: brandbot-secrets
+    runtime: actor
+    matrix: { botUserId: "@brandbot:lab.example.com" }
+    agentRepos: [example/repo]
+    primaryRepo: repo
+EOF
+err=$(render_fails /tmp/values-actor-nondigest.yaml)
+assert_contains "$err" 'agents\[brandbot\].image.tag must be a digest' "digest guard: fails on non-digest tag"
+assert_contains "$err" '"latest"' "digest guard: reports the offending value"
+assert_contains "$err" 'sha256:' "digest guard: fix names sha256 prefix"
+
+# ── Case: deployment-mode agent with non-digest tag renders fine (guard is actor-only) ──
+echo "[case] deployment mode: non-digest tag is fine"
+cat > /tmp/values-deploy-nondigest.yaml <<'EOF'
+image: { repository: ghcr.io/sherodtaylor/agent-smith, tag: latest }
+agents:
+  - name: alpha
+    existingSecret: alpha-secrets
+    matrix: { botUserId: "@alpha:example.com" }
+    agentRepos: [example/repo]
+    primaryRepo: repo
+EOF
+out=$(render /tmp/values-deploy-nondigest.yaml)
+assert_contains "$out" 'agent-smith:latest' "deployment mode: :latest tag renders without the actor digest guard"
 
 echo "[test-chart-render] summary: pass=${PASS} fail=${FAIL}"
 exit $FAIL

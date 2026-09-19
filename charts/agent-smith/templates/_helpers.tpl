@@ -142,3 +142,95 @@ Call with the root context.
 {{- end -}}
 {{- $any -}}
 {{- end -}}
+
+{{/*
+agent-smith.actorTemplateSpec renders the .spec body of an ActorTemplate
+(everything under `spec:`, unindented). Consumed twice per agent:
+
+  1. Hashed → sha256sum | trunc 8 → the metadata.name suffix. The
+     ActorTemplate CRD rejects any in-place spec change, so ANY spec
+     drift (token, image, env, snapshots location) has to yield a new
+     resource. Naming after the spec hash gives that automatically:
+     helm creates the new one and prunes the old on the next successful
+     upgrade.
+  2. Rendered into the manifest under `spec:` on the emitting template.
+
+Keeping both consumers on the same string is the invariant — if they
+ever diverge, the hash stops representing what actually got applied.
+Metadata is deliberately excluded from the hash (no circularity with
+the name).
+
+Call with a context dict: (dict "agent" $agent "root" $root)
+where $root is `.` from the actor-template template invocation (carries
+Values, Release, Chart).
+*/}}
+{{- define "agent-smith.actorTemplateSpec" -}}
+{{- $agent := .agent -}}
+{{- $root := .root -}}
+sandboxClass: {{ $root.Values.actor.workerPool.sandboxClass | quote }}
+workerSelector:
+  matchLabels:
+    app.kubernetes.io/instance: {{ $root.Release.Name }}
+snapshotsConfig:
+  location: {{ printf "s3://%s/%s/%s/" $root.Values.actor.snapshotStore.bucket $root.Release.Name $agent.name | quote }}
+containers:
+  - name: agent
+    image: "{{ $root.Values.image.repository }}@{{ include "agent-smith.agentImageTag" (dict "agent" $agent "Values" $root.Values "Chart" $root.Chart) }}"
+    env:
+      - name: AGENT_NAME
+        value: {{ $agent.name | quote }}
+      - name: HOME
+        value: /root
+      - name: IS_SANDBOX
+        value: "true"
+      {{- $homeserverUrl := default (default "" $root.Values.matrix.homeserverUrl) $agent.matrix.homeserverUrl }}
+      {{- if $homeserverUrl }}
+      - name: MATRIX_HOMESERVER_URL
+        value: {{ $homeserverUrl | quote }}
+      {{- end }}
+      - name: MATRIX_BOT_USER_ID
+        value: {{ $agent.matrix.botUserId | quote }}
+      {{- if $agent.matrix.allowedUsers }}
+      - name: MATRIX_ALLOWED_USERS
+        value: {{ $agent.matrix.allowedUsers | quote }}
+      {{- end }}
+      {{- if $root.Values.quietHours.window }}
+      - name: QUIET_HOURS
+        value: {{ $root.Values.quietHours.window | quote }}
+      - name: QUIET_HOURS_TZ
+        value: {{ $root.Values.quietHours.tz | quote }}
+      {{- end }}
+      {{- /* Fleet-wide extraEnv is deliberately NOT rendered here.
+            The homelab's shared-values.yaml puts the iron-proxy stubs
+            (GITHUB_TOKEN=proxy-token-github, NODE_EXTRA_CA_CERTS) into
+            extraEnv for deployment-mode agents; those stubs are
+            pointless in actor mode because sandbox egress bypasses
+            iron-proxy entirely (nftables → atunnel → atenet-egress) —
+            they would reach the real endpoint unswapped and 401.
+            Anything an actor legitimately needs goes through
+            actor.agentEnv.<name> instead. Do not add `extraEnv |
+            toYaml` here to "match the StatefulSet": it silently
+            re-injects the stubs into every actor, which reads as an
+            auth bug rather than the misconfiguration it is. */ -}}
+      {{- /* Per-agent env from actor.agentEnv.<name>. Rendered last so
+            per-agent values (typically MATRIX_ACCESS_TOKEN, fed by
+            Flux valuesFrom targetPath) win any collision with the
+            fixed keys above. */ -}}
+      {{- range $k, $v := (get ($root.Values.actor.agentEnv | default dict) $agent.name) }}
+      - name: {{ $k }}
+        value: {{ $v | quote }}
+      {{- end }}
+    {{- if $root.Values.actor.readyz.enabled }}
+    readyz:
+      httpGet:
+        path: {{ $root.Values.actor.readyz.path | quote }}
+        port: {{ $root.Values.actor.readyz.port }}
+    {{- end }}
+    volumeMounts:
+      - name: agent-state
+        mountPath: /root
+volumes:
+  - name: agent-state
+    durableDir:
+      size: {{ $root.Values.persistence.home.size | quote }}
+{{- end -}}

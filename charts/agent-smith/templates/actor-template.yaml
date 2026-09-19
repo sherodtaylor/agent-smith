@@ -30,87 +30,60 @@ the persona means creating a new ActorTemplate (immutable).
 durableDir carries ~/.claude + workspace state across suspend/resume so
 per-actor progress survives being suspended.
 
+Metadata.name carries a spec hash suffix: `<agent>-<hash8>`. The CRD
+rejects any in-place spec change, so drift (token rotation, image bump,
+env change, snapshots move) has to yield a new resource. Hashing the
+rendered spec makes that automatic — helm creates the new template and
+prunes the old on a successful upgrade. On a failed health-wait both
+briefly coexist (harmless — the old one carries a stale token anyway).
+The stable `agent-smith.io/agent: <name>` label lets selectors follow
+the persona across hash bumps.
+
+snapshotsConfig.location is deliberately keyed on `<release>/<agent>/`
+with NO hash in the path — the snapshot prefix survives any template
+rename. Rename triggers a fresh BAKE (RunWorkload) on the substrate
+controller path, which has NO router deadline; the ~6s ceiling that
+R5 gate 2 addresses only guards ingress-triggered RESUMEs
+(atelet.AteomHerder/Restore). So rotation cost under hash-suffix
+naming is `persona restart + ~75s rebake` — the same order as a
+deployment-mode secret-rotation restart, and strictly safer than the
+immutable-spec brick this pattern removes. Confirmed against today's
+log evidence: RunWorkload never failed once, only Restore did
+(pmbot/infrabot cross-checked 2026-09-19). Gate 3 (this template)
+closes independent of gate 2. Two verify-at-re-flip items live on
+pmbot's list, not blocking the tag: (a) confirm rename→rebake vs
+attempted restore-from-old-snapshot, and (b) snapshot GC — every
+rebake writes a new UUID under the agent prefix, so orphans
+accumulate at fleet × rotation-cadence scale (added to R6 gate 4).
+
 Spec surface reference: docs/superpowers/specs/2026-07-29-agent-substrate-actor-mode-design.md.
 */ -}}
 {{- $root := . -}}
 {{- $agents := fromJsonArray (include "agent-smith.agentList" .) -}}
 {{- range $agent := $agents }}
 {{- if eq (include "agent-smith.runtimeFor" (dict "agent" $agent "Values" $root.Values)) "actor" }}
+{{- /* Actor image ref format is `<repo>@<tag>` per rc14 CRD's CEL rule
+      requiring "@" in the image string; the substrate accepts only
+      digest refs there, not floating tags. Fail render early with a
+      message that names the fix so operators don't discover this from
+      an obscure CRD admission error at Flux-apply time. */ -}}
+{{- $imageTag := include "agent-smith.agentImageTag" (dict "agent" $agent "Values" $root.Values "Chart" $root.Chart) -}}
+{{- if not (hasPrefix "sha256:" $imageTag) -}}
+{{- fail (printf "agents[%s].image.tag must be a digest (\"sha256:...\") for runtime: actor; got %q — set per-agent image.tag to the resolved digest of the release image (or set the fleet-wide image.tag) so `%s@<tag>` is a valid digest ref" $agent.name $imageTag $root.Values.image.repository) -}}
+{{- end -}}
+{{- $spec := include "agent-smith.actorTemplateSpec" (dict "agent" $agent "root" $root) -}}
+{{- $hash := $spec | sha256sum | trunc 8 -}}
 ---
 apiVersion: ate.dev/v1alpha1
 kind: ActorTemplate
 metadata:
-  name: {{ $agent.name }}
+  name: {{ $agent.name }}-{{ $hash }}
   namespace: {{ $root.Release.Namespace }}
   labels:
     {{- include "agent-smith.labels" $root | nindent 4 }}
     app.kubernetes.io/component: agent
     agent-smith.io/agent: {{ $agent.name }}
 spec:
-  sandboxClass: {{ $root.Values.actor.workerPool.sandboxClass | quote }}
-  workerSelector:
-    matchLabels:
-      app.kubernetes.io/instance: {{ $root.Release.Name }}
-  snapshotsConfig:
-    location: {{ printf "s3://%s/%s/%s/" $root.Values.actor.snapshotStore.bucket $root.Release.Name $agent.name | quote }}
-  containers:
-    - name: agent
-      image: "{{ $root.Values.image.repository }}@{{ include "agent-smith.agentImageTag" (dict "agent" $agent "Values" $root.Values "Chart" $root.Chart) }}"
-      env:
-        - name: AGENT_NAME
-          value: {{ $agent.name | quote }}
-        - name: HOME
-          value: /root
-        - name: IS_SANDBOX
-          value: "true"
-        {{- /* Matrix non-secret env — parity with statefulset's agent
-              container so claude-reauth's matrixDM() and the plugin's
-              runtime config both work. The token itself arrives via
-              actor.agentEnv below. */ -}}
-        {{- $homeserverUrl := default (default "" $root.Values.matrix.homeserverUrl) $agent.matrix.homeserverUrl }}
-        {{- if $homeserverUrl }}
-        - name: MATRIX_HOMESERVER_URL
-          value: {{ $homeserverUrl | quote }}
-        {{- end }}
-        - name: MATRIX_BOT_USER_ID
-          value: {{ $agent.matrix.botUserId | quote }}
-        {{- if $agent.matrix.allowedUsers }}
-        - name: MATRIX_ALLOWED_USERS
-          value: {{ $agent.matrix.allowedUsers | quote }}
-        {{- end }}
-        {{- if $root.Values.quietHours.window }}
-        - name: QUIET_HOURS
-          value: {{ $root.Values.quietHours.window | quote }}
-        - name: QUIET_HOURS_TZ
-          value: {{ $root.Values.quietHours.tz | quote }}
-        {{- end }}
-        {{- /* Fleet-wide extraEnv is deliberately NOT rendered here.
-              The homelab's shared-values.yaml puts the iron-proxy stubs
-              (GITHUB_TOKEN=proxy-token-github, NODE_EXTRA_CA_CERTS) into
-              extraEnv for deployment-mode agents; those stubs are
-              pointless in actor mode because sandbox egress bypasses
-              iron-proxy entirely (nftables → atunnel → atenet-egress).
-              Anything an actor legitimately needs goes through
-              actor.agentEnv.<name> instead. */ -}}
-        {{- /* Per-agent env from actor.agentEnv.<name>. Rendered last so
-              per-agent values (typically MATRIX_ACCESS_TOKEN, fed by
-              Flux valuesFrom targetPath) win any collision. */ -}}
-        {{- range $k, $v := (get ($root.Values.actor.agentEnv | default dict) $agent.name) }}
-        - name: {{ $k }}
-          value: {{ $v | quote }}
-        {{- end }}
-      {{- if $root.Values.actor.readyz.enabled }}
-      readyz:
-        httpGet:
-          path: {{ $root.Values.actor.readyz.path | quote }}
-          port: {{ $root.Values.actor.readyz.port }}
-      {{- end }}
-      volumeMounts:
-        - name: agent-state
-          mountPath: /root
-  volumes:
-    - name: agent-state
-      durableDir:
-        size: {{ $root.Values.persistence.home.size | quote }}
+  {{- $spec | nindent 2 }}
 {{- end }}
 {{- end }}
